@@ -6,13 +6,20 @@
   101:subtrator ; 110: multiplicador ; 111: divisor (parte inteira de X/Y)
 */
 
-// Definicao das variaveis de entrada e saida
-byte entradaX;
-byte entradaY;
-byte operacao;
-byte saidaZ;
-byte Cout;
+// Configura a necessidade de uso do botao 
+//#define BUTTON
 
+#define AND 0b000
+#define OR  0b001
+#define NOT 0b010
+#define XOR 0b011
+#define SUM 0b100
+#define SUB 0b101
+#define MUL 0b110
+#define DIV 0b111
+
+// Tamanho do Buffer de Entrada
+#define inputBufferSize 6
 
 //Definindo os pinos do arduino
 const int ledCout = 13;
@@ -20,36 +27,40 @@ const int ledZ3 = 9;
 const int ledZ2 = 10;
 const int ledZ1 = 11;
 const int ledZ0 = 12;
+#ifdef BUTTON
 const int button = 8;
+#endif
 
 //Definindo as funcoes das operacoes, para o compilador saber que existem
-byte AND(byte A, byte B);
-byte OR(byte A, byte B);
-byte NOT(byte B);
-byte XOR(byte A, byte B);
+byte andOp(byte A, byte B);
+byte orOp(byte A, byte B);
+byte notOp(byte B);
+byte xorOp(byte A, byte B);
 byte somador(byte A, byte B, byte &Cout);
 byte subtrator(byte A, byte B, byte &BorrowOut);
 byte multiplicador(byte A, byte B,byte &OV);
 byte divisor(byte A, byte B);
-byte str2byte(String str);
+byte receberEntrada(char nomeDaEntrada, char* entradaString);
+byte receberOperacao(char* entradaString);
+byte str2byte(char* str);
+void readSerialInput(char* buffer, int bufferSize);
+
+#ifdef BUTTON
 void waitButton(void);
+#endif
 
 void setup() {
   Serial.begin(9600);
+
+	#ifdef BUTTON
   pinMode(button,  INPUT_PULLUP);
-  pinMode(ledCout, OUTPUT);
+	#endif  
+	
+	pinMode(ledCout, OUTPUT);
   pinMode(ledZ3,   OUTPUT);
   pinMode(ledZ2,   OUTPUT);
   pinMode(ledZ1,   OUTPUT);
   pinMode(ledZ0,   OUTPUT);
-
-/*
-  Serial.println("");
-  Serial.println("================== Funcionamento da ULA 4 BITS ==================");
-  Serial.print("- Recebe as entradas X e Y, respectivamente, por meio do monitor serial (Obs: entradas de 4 bits)\n");
-  Serial.print("- Recebe a operação desejada, também por meio do monitor (Obs:entrada de 3 bits)\n");
-  Serial.print("- Retorna o resultado da operacao em binario e em decimal: Cout Z3 Z2 Z1 Z0\n");
-*/
 
   Serial.println("");
   Serial.println(F("\t\t\t\t\t╔═══════════════════════════════════════════════════╗"));
@@ -63,123 +74,80 @@ void setup() {
 }
 
 void loop() {
-  Cout = 0;
+	char entradaString[inputBufferSize] = {};
+
+	byte entradaX = receberEntrada('X', entradaString);
+	byte entradaY = receberEntrada('Y', entradaString);
+
+  Serial.println(F("╔═══════════════════ PAINEL DE OPERAÇÕES DA ULA ═══════════════════╗"));
+  Serial.println(F("║  ╔═══════════╗  ╔══════════╗  ╔════════════╗  ╔═══════════════╗  ║"));
+  Serial.println(F("║  ║ 000: AND  ║  ║ 010: NOT ║  ║ 100: SOMA  ║  ║ 110: MULTIPL. ║  ║"));
+  Serial.println(F("║  ╚═══════════╝  ╚══════════╝  ╚════════════╝  ╚═══════════════╝  ║"));
+  Serial.println(F("║  ╔═══════════╗  ╔══════════╗  ╔════════════╗  ╔═══════════════╗  ║"));
+  Serial.println(F("║  ║ 001: OR   ║  ║ 011: XOR ║  ║ 101: SUB.  ║  ║ 111: DIVISAO  ║  ║"));
+  Serial.println(F("║  ╚═══════════╝  ╚══════════╝  ╚════════════╝  ╚═══════════════╝  ║"));
+  Serial.println(F("╚══════════════════════════════════════════════════════════════════╝"));
   Serial.println("");
 
-  String entradaXstring;
+	byte operacao = receberOperacao(entradaString);
 
-  Serial.println("Digite a entrada X com 4 bits: ");
-  while (Serial.available() == 0) {
-  }
-  entradaXstring = Serial.readStringUntil('\n');
-  entradaX = str2byte(entradaXstring);//recebe o valor digitado no serial monitor
-  waitButton();
+  const char* op;
+	byte saidaZ = 0;
+	byte Cout = 0;
 
-  Serial.print("\n");
-  Serial.print("X = ");
-  Serial.print(entradaX);
-  Serial.print(" | ");
-  Serial.print(entradaXstring);
-  Serial.print("\n");
-
-  while (Serial.available() > 0) {
-    Serial.read(); // Lê e descarta qualquer caractere restante (como o '\n')
-  }
-
-  Serial.println("Digite a entrada Y com 4 bits: ");
-  while (Serial.available() == 0) {
-  }
-  String entradaYstring = Serial.readStringUntil('\n');
-  entradaY = str2byte(entradaYstring);
-  waitButton();
-
-  Serial.print("\n");
-  Serial.print("Y = ");
-  Serial.print(entradaY);
-  Serial.print(" | ");
-  Serial.print(entradaYstring);
-  Serial.print("\n");
-
-  while (Serial.available() > 0) {
-    Serial.read(); // Lê e descarta qualquer caractere restante (como o '\n')
-  }
-
-  /*
-  Serial.println("Digite a operacao desejada: ");
-  Serial.print("000: AND ; 001: OR ; 010: NOT ; 011: XOR\n");
-  Serial.print("100: SOMA ; 101: SUBTRACAO ; 110: MULTIPLICACAO ; 111: DIVISAO (apenas parte inteira)\n");
-  */
-
-  Serial.println("");
-  Serial.println("================== PAINEL DE OPERAÇÕES DA ULA ==================");
-  Serial.println("");
-  Serial.println(" .-----------.  .----------.      .------------.  .---------------.");
-  Serial.println(" | 000: AND  |  | 010: NOT |      | 100: SOMA  |  | 110: MULTIPL. |");
-  Serial.println(" '-----------'  '----------'      '------------'  '---------------'");
-  Serial.println(" .----------.  .----------.      .------------.  .---------------.");
-  Serial.println(" | 001: OR   |  | 011: XOR |      | 101: SUB.  |  | 111: DIVISAO  |");
-  Serial.println(" '----------'  '----------'      '------------'  '---------------'");
-  Serial.println("");
-  Serial.println("================================================================");
-  Serial.print("\n> Escolha a operacao: ");
-
-  while (Serial.available() == 0) {
-  }
-  String entradaOp = Serial.readStringUntil('\n');
-  operacao = str2byte(entradaOp);
-
-  while (Serial.available() > 0) {
-    Serial.read(); // Lê e descarta qualquer caractere restante (como o '\n')
-  }
-  waitButton();
-  Serial.print("\n");
-
-  String op;
-  //basicamente um if...else para realizar a operacao devida
   switch(operacao) {
-    case 0b000:
-      op = "and";
-      saidaZ = AND(entradaX,entradaY);
-      break;
-    case 0b001:
-      op = "or";
-      saidaZ = OR(entradaX,entradaY);
-      break;
-    case 0b010:
-      op = "not";
-      saidaZ = NOT(entradaY);
-      break;
-    case 0b011:
-      op = "xor";
-      saidaZ = XOR(entradaX,entradaY);
-      break;
-    case 0b100:
-      op = "soma";
+    case 0b000: {
+      op = "And";
+      saidaZ = andOp(entradaX,entradaY);
+    } break;
+
+    case 0b001: {
+      op = "Or";
+      saidaZ = orOp(entradaX,entradaY);
+    } break;
+
+    case 0b010: {
+      op = "Not";
+      saidaZ = notOp(entradaY);
+    } break;
+
+    case 0b011: {
+      op = "Xor";
+      saidaZ = xorOp(entradaX,entradaY);
+    }  break;
+
+    case 0b100: {
+      op = "Soma";
       saidaZ = somador(entradaX,entradaY, Cout);
-      break;
-    case 0b101:
-      op = "sub";
+    }  break;
+
+    case 0b101: {
+      op = "Sub";
       saidaZ = subtrator(entradaX,entradaY, Cout);
-      break;
-    case 0b110:
-      op = "mul";
+    }  break;
+
+    case 0b110: {
+      op = "Mul";
       saidaZ = multiplicador(entradaX,entradaY,Cout);
-      break;
-    case 0b111:
-      op = "div";
+    }  break;
+
+    case 0b111: {
+      op = "Div";
       saidaZ = divisor(entradaX,entradaY);
-      break;
+    }  break;
+
     default:
+      Serial.println("Operacao invalida!");
       return;
   }
 
   Serial.print("Operação: ");
-  Serial.print(entradaOp);
+  Serial.print(entradaString);
   Serial.print(" | ");
   Serial.print(op);
   Serial.print("\n");
 
-//Exibindo resultado no monitor -> resultado: Cout Z3 Z2 Z1 Z0
+	//Exibindo resultado no monitor -> resultado: Cout Z3 Z2 Z1 Z0
   Serial.println("Resultado:");
   Serial.print("Binário: ");
   Serial.print(Cout);
@@ -197,33 +165,33 @@ void loop() {
 
   if (Cout == 1) {
     Serial.print(" | ");
-    if (operacao == 0b100)
-      Serial.print("Teve Cout");
-    else if (operacao == 0b101)
-      Serial.print("Teve Borrow");
-    else if (operacao == 0b110)
+    if (operacao == SUM) Serial.print("Teve Cout");
+    else if (operacao == SUB) Serial.print("Teve Borrow");
+    else if (operacao == MUL)
       Serial.print("Teve Overflow");
     }
-
-//Exibindo resultado nos leds's
+	
   acenderLeds(saidaZ, Cout);
+
+	Serial.println("");
+	Serial.println("");
 }
 
 //Implementacao das operacoes em funcoes separadas
 
-byte AND(byte A, byte B){
+byte andOp(byte A, byte B){
   return A & B;
 }
 
-byte OR(byte A, byte B){
+byte orOp(byte A, byte B){
   return (byte)(A | B);
 }
 
-byte NOT(byte B){
-  return ~B & 0xF;
+byte notOp(byte B){
+  return ~B & 0x0F;
 }
 
-byte XOR(byte A, byte B){
+byte xorOp(byte A, byte B){
   return (byte)(A ^ B);
 }
 
@@ -255,7 +223,6 @@ byte divisor(byte A, byte B){
   return (byte)A/B; //operador / realiza divisão inteira
 } 
 
-//funcao para acender os leds
 void acenderLeds(byte valor, byte cout ){
   digitalWrite(ledZ3, bitRead(valor,3)); //ledZ3 recebe o valor do MSB (3o bit de Z)
   digitalWrite(ledZ2, bitRead(valor,2));
@@ -264,10 +231,65 @@ void acenderLeds(byte valor, byte cout ){
   digitalWrite(ledCout, cout); //ledCout recebe o valor de cout (0 ou 1)
 }
 
-byte str2byte(String string) {
-  return (byte)strtol(string.c_str(), NULL, 2);
+byte str2byte(char* str) {
+  return (byte)strtol(str, NULL, 2);
 }
 
+byte receberEntrada(char nomeDaEntrada, char* entradaString) {	
+	byte entradaByte = 0;
+
+  Serial.print("Digite a entrada ");
+	Serial.print(nomeDaEntrada);
+	Serial.println(" com 4 bits:");
+  
+	readSerialInput(entradaString, inputBufferSize);
+  entradaByte = str2byte(entradaString);
+
+	#ifdef BUTTON
+  waitButton();
+	#endif
+
+	Serial.print(nomeDaEntrada);
+  Serial.print(" = ");
+  Serial.print(entradaByte);
+  Serial.print(" | ");
+  Serial.println(entradaString);
+	
+	return entradaByte;
+}
+
+byte receberOperacao(char* entradaString) {	
+	byte operacaoByte = 0;
+
+  Serial.print("Escolha a operacao: ");
+
+	readSerialInput(entradaString, inputBufferSize);
+  operacaoByte = str2byte(entradaString);
+
+	#ifdef BUTTON
+  waitButton();
+	#endif
+
+	return operacaoByte;
+}
+
+void readSerialInput(char* buffer, int bufferSize) {
+  int index = 0;
+  while (true) {
+    if (Serial.available() > 0) {
+      char c = Serial.read();
+      if (c == '\n' || c == '\r') {
+        buffer[index] = '\0';
+        while (Serial.available() > 0) Serial.read();
+        return;
+      } else if (index < bufferSize - 1) {
+        buffer[index++] = c;
+      }
+    }
+  }
+}
+
+#ifdef BUTTON
 void waitButton(void) {
   Serial.println("Aperte o Botão para carregar a entrada!");
   byte dotCount = 0;
@@ -276,8 +298,9 @@ void waitButton(void) {
     delay(500);
     dotCount++;
     if (dotCount > 3) {
-      Serial.print("\r"); 
+      Serial.print("\r\r\r"); 
       dotCount = 0;
     }
   }
 }
+#endif
