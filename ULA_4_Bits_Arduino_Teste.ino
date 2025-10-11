@@ -79,14 +79,14 @@ void loop() {
 	byte entradaX = receberEntrada('X', entradaString);
 	byte entradaY = receberEntrada('Y', entradaString);
 
-  Serial.println(F("╔═══════════════════ PAINEL DE OPERAÇÕES DA ULA ═══════════════════╗"));
-  Serial.println(F("║  ╔═══════════╗  ╔══════════╗  ╔════════════╗  ╔═══════════════╗  ║"));
-  Serial.println(F("║  ║ 000: AND  ║  ║ 010: NOT ║  ║ 100: SOMA  ║  ║ 110: MULTIPL. ║  ║"));
-  Serial.println(F("║  ╚═══════════╝  ╚══════════╝  ╚════════════╝  ╚═══════════════╝  ║"));
-  Serial.println(F("║  ╔═══════════╗  ╔══════════╗  ╔════════════╗  ╔═══════════════╗  ║"));
-  Serial.println(F("║  ║ 001: OR   ║  ║ 011: XOR ║  ║ 101: SUB.  ║  ║ 111: DIVISAO  ║  ║"));
-  Serial.println(F("║  ╚═══════════╝  ╚══════════╝  ╚════════════╝  ╚═══════════════╝  ║"));
-  Serial.println(F("╚══════════════════════════════════════════════════════════════════╝"));
+  Serial.println(F("\t\t\t\t\t╔═══════════════════ PAINEL DE OPERAÇÕES DA ULA ═══════════════════╗"));
+  Serial.println(F("\t\t\t\t\t║  ╔═══════════╗  ╔══════════╗  ╔════════════╗  ╔═══════════════╗  ║"));
+  Serial.println(F("\t\t\t\t\t║  ║ 000: AND  ║  ║ 010: NOT ║  ║ 100: SOMA  ║  ║ 110: MULTIPL. ║  ║"));
+  Serial.println(F("\t\t\t\t\t║  ╚═══════════╝  ╚══════════╝  ╚════════════╝  ╚═══════════════╝  ║"));
+  Serial.println(F("\t\t\t\t\t║  ╔═══════════╗  ╔══════════╗  ╔════════════╗  ╔═══════════════╗  ║"));
+  Serial.println(F("\t\t\t\t\t║  ║ 001: OR   ║  ║ 011: XOR ║  ║ 101: SUB.  ║  ║ 111: DIVISAO  ║  ║"));
+  Serial.println(F("\t\t\t\t\t║  ╚═══════════╝  ╚══════════╝  ╚════════════╝  ╚═══════════════╝  ║"));
+  Serial.println(F("\t\t\t\t\t╚══════════════════════════════════════════════════════════════════╝"));
   Serial.println("");
 
 	byte operacao = receberOperacao(entradaString);
@@ -220,7 +220,7 @@ byte multiplicador (byte A, byte B, byte &OV){
 }
 
 byte divisor(byte A, byte B){
-  return (byte)A/B; //operador / realiza divisão inteira
+  return (byte)A / B;
 } 
 
 void acenderLeds(byte valor, byte cout ){
