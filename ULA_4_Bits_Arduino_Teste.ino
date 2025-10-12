@@ -9,6 +9,11 @@
 // Configura a necessidade de uso do botao 
 //#define BUTTON
 
+// Modos de Operacao
+#define MANUAL 1
+#define AUTOMATICO 2
+
+// Operacoes
 #define AND 0b000
 #define OR  0b001
 #define NOT 0b010
@@ -22,13 +27,13 @@
 #define inputBufferSize 6
 
 //Definindo os pinos do arduino
-const int ledCout = 13;
-const int ledZ3 = 9;
-const int ledZ2 = 10;
-const int ledZ1 = 11;
-const int ledZ0 = 12;
+#define ledCout 13
+#define ledZ3 9
+#define ledZ2 10
+#define ledZ1 11
+#define ledZ0 12
 #ifdef BUTTON
-const int button = 8;
+#define button = 8;
 #endif
 
 //Definindo as funcoes das operacoes, para o compilador saber que existem
@@ -43,7 +48,11 @@ byte divisor(byte A, byte B);
 byte receberEntrada(char nomeDaEntrada, char* entradaString);
 byte receberOperacao(char* entradaString);
 byte str2byte(char* str);
+byte str2dec(char* str);
 void readSerialInput(char* buffer, int bufferSize);
+void printarResultado(byte resultado, byte cout, byte operacao);
+void modoManual(void);
+void modoAutomatico(void);
 
 #ifdef BUTTON
 void waitButton(void);
@@ -75,106 +84,23 @@ void setup() {
 
 void loop() {
 	char entradaString[inputBufferSize] = {};
-
-	byte entradaX = receberEntrada('X', entradaString);
-	byte entradaY = receberEntrada('Y', entradaString);
-
-  Serial.println(F("\t\t\t\t\t╔═══════════════════ PAINEL DE OPERAÇÕES DA ULA ═══════════════════╗"));
-  Serial.println(F("\t\t\t\t\t║  ╔═══════════╗  ╔══════════╗  ╔════════════╗  ╔═══════════════╗  ║"));
-  Serial.println(F("\t\t\t\t\t║  ║ 000: AND  ║  ║ 010: NOT ║  ║ 100: SOMA  ║  ║ 110: MULTIPL. ║  ║"));
-  Serial.println(F("\t\t\t\t\t║  ╚═══════════╝  ╚══════════╝  ╚════════════╝  ╚═══════════════╝  ║"));
-  Serial.println(F("\t\t\t\t\t║  ╔═══════════╗  ╔══════════╗  ╔════════════╗  ╔═══════════════╗  ║"));
-  Serial.println(F("\t\t\t\t\t║  ║ 001: OR   ║  ║ 011: XOR ║  ║ 101: SUB.  ║  ║ 111: DIVISAO  ║  ║"));
-  Serial.println(F("\t\t\t\t\t║  ╚═══════════╝  ╚══════════╝  ╚════════════╝  ╚═══════════════╝  ║"));
-  Serial.println(F("\t\t\t\t\t╚══════════════════════════════════════════════════════════════════╝"));
-  Serial.println("");
-
-	byte operacao = receberOperacao(entradaString);
-
-  const char* op;
-	byte saidaZ = 0;
-	byte Cout = 0;
-
-  switch(operacao) {
-    case 0b000: {
-      op = "And";
-      saidaZ = andOp(entradaX,entradaY);
-    } break;
-
-    case 0b001: {
-      op = "Or";
-      saidaZ = orOp(entradaX,entradaY);
-    } break;
-
-    case 0b010: {
-      op = "Not";
-      saidaZ = notOp(entradaY);
-    } break;
-
-    case 0b011: {
-      op = "Xor";
-      saidaZ = xorOp(entradaX,entradaY);
-    }  break;
-
-    case 0b100: {
-      op = "Soma";
-      saidaZ = somador(entradaX,entradaY, Cout);
-    }  break;
-
-    case 0b101: {
-      op = "Sub";
-      saidaZ = subtrator(entradaX,entradaY, Cout);
-    }  break;
-
-    case 0b110: {
-      op = "Mul";
-      saidaZ = multiplicador(entradaX,entradaY,Cout);
-    }  break;
-
-    case 0b111: {
-      op = "Div";
-      saidaZ = divisor(entradaX,entradaY);
-    }  break;
-
-    default:
-      Serial.println("Operacao invalida!");
-      return;
-  }
-
-  Serial.print("Operação: ");
-  Serial.print(entradaString);
-  Serial.print(" | ");
-  Serial.print(op);
-  Serial.print("\n");
-
-	//Exibindo resultado no monitor -> resultado: Cout Z3 Z2 Z1 Z0
-  Serial.println("Resultado:");
-  Serial.print("Binário: ");
-  Serial.print(Cout);
-  Serial.print(bitRead(saidaZ,3));
-  Serial.print(bitRead(saidaZ,2));
-  Serial.print(bitRead(saidaZ,1));
-  Serial.print(bitRead(saidaZ,0));
-  Serial.print(" | ");
-  Serial.print("Decimal: ");
-  if (Cout == 1) {
-    Serial.print(saidaZ + 16);
-  } else {
-    Serial.print(saidaZ);
-  }
-
-  if (Cout == 1) {
-    Serial.print(" | ");
-    if (operacao == SUM) Serial.print("Teve Cout");
-    else if (operacao == SUB) Serial.print("Teve Borrow");
-    else if (operacao == MUL)
-      Serial.print("Teve Overflow");
-    }
 	
-  acenderLeds(saidaZ, Cout);
+	Serial.print("\nSelecione o modo:\n  (1) Manual\n  (2) Automático\n");
 
-	Serial.println("");
-	Serial.println("");
+	readSerialInput(entradaString, inputBufferSize);
+
+	#ifdef BUTTON
+  waitButton();
+	#endif
+
+	byte modo = str2dec(entradaString);
+	if (modo == MANUAL) {
+		modoManual();
+
+	} else if (modo == AUTOMATICO) {
+		modoAutomatico();	
+	} 
+
 }
 
 //Implementacao das operacoes em funcoes separadas
@@ -235,6 +161,11 @@ byte str2byte(char* str) {
   return (byte)strtol(str, NULL, 2);
 }
 
+byte str2dec(char* str) {
+  return (byte)strtol(str, NULL, 10);
+}
+
+
 byte receberEntrada(char nomeDaEntrada, char* entradaString) {	
 	byte entradaByte = 0;
 
@@ -280,6 +211,7 @@ void readSerialInput(char* buffer, int bufferSize) {
       char c = Serial.read();
       if (c == '\n' || c == '\r') {
         buffer[index] = '\0';
+
         while (Serial.available() > 0) Serial.read();
         return;
       } else if (index < bufferSize - 1) {
@@ -304,3 +236,171 @@ void waitButton(void) {
   }
 }
 #endif
+
+void printarResultado(byte resultado, byte cout, byte operacao) {
+  Serial.print("Binário: ");
+  Serial.print(cout);
+  Serial.print(bitRead(resultado,3));
+  Serial.print(bitRead(resultado,2));
+  Serial.print(bitRead(resultado,1));
+  Serial.print(bitRead(resultado,0));
+  Serial.print(" | ");
+  Serial.print("Decimal: ");
+  if (cout == 1) {
+    Serial.print(resultado + 16);
+  } else {
+    Serial.print(resultado);
+  }
+
+  if (cout == 1) {
+    Serial.print(" | ");
+    if (operacao == SUM) Serial.print("Teve Cout");
+    else if (operacao == SUB) Serial.print("Teve Borrow");
+    else if (operacao == MUL)
+      Serial.print("Teve Overflow");
+    }
+}
+
+
+void modoAutomatico(void) {
+	char entradaString[inputBufferSize] = {};
+	byte cout = 0;	
+
+	byte entradaA = receberEntrada('A', entradaString);
+	byte entradaB = receberEntrada('B', entradaString);
+	
+	byte resultadoR = somador(entradaA, entradaB, cout);
+	Serial.print("\n");
+	Serial.print("R = A + B = ");
+	printarResultado(resultadoR, cout, SUM);
+	
+	resultadoR = multiplicador(resultadoR, resultadoR, cout);	
+	Serial.print("\n");
+	Serial.print("R = R * R = ");          	
+	printarResultado(resultadoR, cout, MUL);
+
+	resultadoR = subtrator(resultadoR, entradaB, cout);	
+	Serial.print("\n");
+	Serial.print("R = R - B = ");          	
+	printarResultado(resultadoR, cout, SUB);
+
+	resultadoR = subtrator(resultadoR, entradaA, cout);	
+	Serial.print("\n");
+	Serial.print("R = R - A = ");          	
+  printarResultado(resultadoR, cout, SUB);
+
+	resultadoR = divisor(resultadoR, entradaB);	
+	Serial.print("\n");
+	Serial.print("R = R / B = ");          	
+  printarResultado(resultadoR, 0, DIV);
+
+	resultadoR = andOp(resultadoR, entradaA);	
+	Serial.print("\n");
+	Serial.print("R = R & A = ");          	
+	printarResultado(resultadoR, 0, AND);
+
+	resultadoR = notOp(resultadoR);	
+	Serial.print("\n");
+	Serial.print("R = ~R = ");          	
+	printarResultado(resultadoR, 0, NOT);
+
+	resultadoR = orOp(resultadoR, entradaA);	
+	Serial.print("\n");
+	Serial.print("R = R | A = ");          	
+	printarResultado(resultadoR, 0, OR);
+
+	resultadoR = somador(resultadoR, entradaA, cout);
+	Serial.print("\n");
+	Serial.print("R = R + A = ");
+	printarResultado(resultadoR, cout, SUM);
+
+	resultadoR = notOp(resultadoR);	
+	Serial.print("\n");
+	Serial.print("R = ~R = ");          	
+	printarResultado(resultadoR, 0, NOT);
+}
+
+void modoManual(void) {
+
+	char entradaString[inputBufferSize] = {};
+
+	byte entradaX = receberEntrada('X', entradaString);
+	byte entradaY = receberEntrada('Y', entradaString);
+
+  Serial.println(F("\t\t\t\t\t╔═══════════════════ PAINEL DE OPERAÇÕES DA ULA ═══════════════════╗"));
+  Serial.println(F("\t\t\t\t\t║  ╔═══════════╗  ╔══════════╗  ╔════════════╗  ╔═══════════════╗  ║"));
+  Serial.println(F("\t\t\t\t\t║  ║ 000: AND  ║  ║ 010: NOT ║  ║ 100: SOMA  ║  ║ 110: MULTIPL. ║  ║"));
+  Serial.println(F("\t\t\t\t\t║  ╚═══════════╝  ╚══════════╝  ╚════════════╝  ╚═══════════════╝  ║"));
+  Serial.println(F("\t\t\t\t\t║  ╔═══════════╗  ╔══════════╗  ╔════════════╗  ╔═══════════════╗  ║"));
+  Serial.println(F("\t\t\t\t\t║  ║ 001: OR   ║  ║ 011: XOR ║  ║ 101: SUB.  ║  ║ 111: DIVISAO  ║  ║"));
+  Serial.println(F("\t\t\t\t\t║  ╚═══════════╝  ╚══════════╝  ╚════════════╝  ╚═══════════════╝  ║"));
+  Serial.println(F("\t\t\t\t\t╚══════════════════════════════════════════════════════════════════╝"));
+  Serial.println("");
+
+	byte operacao = receberOperacao(entradaString);
+
+  const char* op;
+	byte saidaZ = 0;
+	byte Cout = 0;
+
+  switch(operacao) {
+    case AND: {
+      op = "And";
+      saidaZ = andOp(entradaX,entradaY);
+    } break;
+
+    case OR: {
+      op = "Or";
+      saidaZ = orOp(entradaX,entradaY);
+    } break;
+
+    case NOT: {
+      op = "Not";
+      saidaZ = notOp(entradaY);
+    } break;
+
+    case XOR: {
+      op = "Xor";
+      saidaZ = xorOp(entradaX,entradaY);
+    }  break;
+
+    case SUM: {
+      op = "Soma";
+      saidaZ = somador(entradaX,entradaY, Cout);
+    }  break;
+
+    case SUB: {
+      op = "Sub";
+      saidaZ = subtrator(entradaX,entradaY, Cout);
+    }  break;
+
+    case MUL: {
+      op = "Mul";
+      saidaZ = multiplicador(entradaX,entradaY,Cout);
+    }  break;
+
+    case DIV: {
+      op = "Div";
+      saidaZ = divisor(entradaX,entradaY);
+    }  break;
+
+    default:
+      Serial.println("Operacao invalida!");
+      return;
+  }
+
+  Serial.print("Operação: ");
+  Serial.print(entradaString);
+  Serial.print(" | ");
+  Serial.print(op);
+  Serial.print("\n");
+
+	//Exibindo resultado no monitor -> resultado: Cout Z3 Z2 Z1 Z0
+  Serial.println("Resultado:");
+	printarResultado(saidaZ, Cout, operacao);
+	
+  acenderLeds(saidaZ, Cout);
+
+	Serial.println("");
+	Serial.println("");
+}
