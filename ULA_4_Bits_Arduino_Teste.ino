@@ -51,6 +51,7 @@ byte str2byte(char* str);
 byte str2dec(char* str);
 void readSerialInput(char* buffer, int bufferSize);
 void printarResultado(byte resultado, byte cout, byte operacao);
+void imprimirNaCaixa(String titulo, byte resultado, byte cout, Op operacao, bool isFinal);
 void modoManual(void);
 void modoAutomatico(void);
 
@@ -65,7 +66,7 @@ void setup() {
   pinMode(button,  INPUT_PULLUP);
 	#endif  
 	
-	pinMode(ledCout, OUTPUT);
+pinMode(ledCout, OUTPUT);
   pinMode(ledZ3,   OUTPUT);
   pinMode(ledZ2,   OUTPUT);
   pinMode(ledZ1,   OUTPUT);
@@ -84,13 +85,24 @@ void setup() {
 
 void loop() {
 	char entradaString[inputBufferSize] = {};
-	
-	Serial.print("\nSelecione o modo:\n  (1) Manual\n  (2) Automático\n");
+
+	  Serial.println(F("")); // Pula uma linha para dar espaço
+	  Serial.println(F("\t\t\t======================================="));
+	  Serial.println(F("\t\t\t|                                     |"));
+	  Serial.println(F("\t\t\t|         SELECIONE O MODO            |"));
+	  Serial.println(F("\t\t\t|                                     |"));
+	  Serial.println(F("\t\t\t+-------------------------------------+"));
+	  Serial.println(F("\t\t\t|                                     |"));
+	  Serial.println(F("\t\t\t|           (1) Modo Manual           |"));
+	  Serial.println(F("\t\t\t|           (2) Modo Automatico       |"));
+	  Serial.println(F("\t\t\t|                                     |"));
+	  Serial.println(F("\t\t\t======================================="));
+	  Serial.print(F("\n\t\t\tDigite sua opcao: "));
 
 	readSerialInput(entradaString, inputBufferSize);
 
 	#ifdef BUTTON
-  waitButton();
+  waitButton(); //espera o botao ser apertado
 	#endif
 
 	byte modo = str2dec(entradaString);
@@ -114,7 +126,7 @@ byte orOp(byte A, byte B){
 }
 
 byte notOp(byte B){
-  return ~B & 0x0F;
+  return ~B & 0x0F; //And com 15 para que Cout = 0 (nao seja invertido)
 }
 
 byte xorOp(byte A, byte B){
@@ -124,7 +136,7 @@ byte xorOp(byte A, byte B){
 byte somador(byte A, byte B, byte &Cout){
   byte soma = A + B;
 
-  Cout = soma > 0x0F;
+  Cout = soma > 0x0F; // Cout = 1 se soma > 15
   
   return (byte)(soma & 0x0F); //soma and "1111" -> retorna apenas os 4 bits (o outro fica em Cout, se tiver) 
 }
@@ -148,7 +160,7 @@ byte multiplicador (byte A, byte B, byte &OV){
 byte divisor(byte A, byte B){
   return (byte)A / B;
 } 
-
+//Funcao acender os leds na protoboard
 void acenderLeds(byte valor, byte cout ){
   digitalWrite(ledZ3, bitRead(valor,3)); //ledZ3 recebe o valor do MSB (3o bit de Z)
   digitalWrite(ledZ2, bitRead(valor,2));
@@ -260,7 +272,36 @@ void printarResultado(byte resultado, byte cout, byte operacao) {
       Serial.print("Teve Overflow");
     }
 }
-
+//Funcao que faz o design das caixas de resultado no modo automatico
+void imprimirNaCaixa(String titulo, byte resultado, byte cout, Op operacao, bool isFinal) {
+  if (!isFinal) {
+    //Caixa para os resultados intermediarios
+    Serial.println(F("")); // Espaçamento
+    Serial.println(F("\t+----------------------------------------+"));
+    Serial.print(F("\t| "));
+    Serial.print(titulo);
+    printarResultado(resultado, cout, operacao);
+    Serial.println(F(" |"));
+    Serial.println(F("\t+----------------------------------------+"));
+  } else {
+    // Caixa para o resultado final
+    Serial.println(F(""));
+    Serial.println(F("\t     ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░")); 
+    Serial.println(F("\t=================================================="));
+    Serial.println(F("\t|                                                |"));
+    Serial.println(F("\t|                R E S U L T A D O               |"));
+    Serial.println(F("\t|                  F I N A L                     |"));
+    Serial.println(F("\t|                                                |"));
+    Serial.println(F("\t+------------------------------------------------+"));
+    Serial.print(F("\t|  "));
+    Serial.print(titulo);
+    printarResultado(resultado, cout, operacao);
+    Serial.println(F("  |"));
+    Serial.println(F("\t=================================================="));
+    Serial.println(F("\t     ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒")); 
+    Serial.println(F(""));
+  }
+}
 
 void modoAutomatico(void) {
 	char entradaString[inputBufferSize] = {};
@@ -270,54 +311,35 @@ void modoAutomatico(void) {
 	byte entradaB = receberEntrada('B', entradaString);
 	
 	byte resultadoR = somador(entradaA, entradaB, cout);
-	Serial.print("\n");
-	Serial.print("R = A + B = ");
-	printarResultado(resultadoR, cout, SUM);
+	imprimirNaCaixa("R = R + A = ",resultadoR, cout,SUM, false);
 	
-	resultadoR = multiplicador(resultadoR, resultadoR, cout);	
-	Serial.print("\n");
-	Serial.print("R = R * R = ");          	
-	printarResultado(resultadoR, cout, MUL);
+	resultadoR = multiplicador(resultadoR, resultadoR, cout);	        	
+	imprimirNaCaixa("R = R * R = ",resultadoR, cout,MUL, false);
 
-	resultadoR = subtrator(resultadoR, entradaB, cout);	
-	Serial.print("\n");
-	Serial.print("R = R - B = ");          	
-	printarResultado(resultadoR, cout, SUB);
+	resultadoR = subtrator(resultadoR, entradaB, cout);	      	
+	imprimirNaCaixa("R = R - B = ",resultadoR, cout,SUB, false);
 
-	resultadoR = subtrator(resultadoR, entradaA, cout);	
-	Serial.print("\n");
-	Serial.print("R = R - A = ");          	
-  printarResultado(resultadoR, cout, SUB);
+	resultadoR = subtrator(resultadoR, entradaA, cout);	        	
+	imprimirNaCaixa("R = R - A = ",resultadoR, cout,SUB, false);
 
 	resultadoR = divisor(resultadoR, entradaB);	
-	Serial.print("\n");
-	Serial.print("R = R / B = ");          	
-  printarResultado(resultadoR, 0, DIV);
+	imprimirNaCaixa("R = R / B = ",resultadoR, 0,DIV, false);
+ 
+	resultadoR = andOp(resultadoR, entradaA);	   
+	imprimirNaCaixa("R = R & A = ",resultadoR, 0,AND, false);
 
-	resultadoR = andOp(resultadoR, entradaA);	
-	Serial.print("\n");
-	Serial.print("R = R & A = ");          	
-	printarResultado(resultadoR, 0, AND);
+	resultadoR = notOp(resultadoR);	      
+	imprimirNaCaixa("R = ~R = ",resultadoR, 0,NOT, false);
 
-	resultadoR = notOp(resultadoR);	
-	Serial.print("\n");
-	Serial.print("R = ~R = ");          	
-	printarResultado(resultadoR, 0, NOT);
-
-	resultadoR = orOp(resultadoR, entradaA);	
-	Serial.print("\n");
-	Serial.print("R = R | A = ");          	
-	printarResultado(resultadoR, 0, OR);
+	resultadoR = orOp(resultadoR, entradaA);	    	
+	imprimirNaCaixa("R = R | A = ",resultadoR, 0,OR, false);
 
 	resultadoR = somador(resultadoR, entradaA, cout);
-	Serial.print("\n");
-	Serial.print("R = R + A = ");
-	printarResultado(resultadoR, cout, SUM);
+	imprimirNaCaixa("R = R + A = ",resultadoR, cout,SUM, false);
 
 	resultadoR = notOp(resultadoR);	
-	Serial.print("\n");
-	Serial.print("R = ~R = ");          	
-	printarResultado(resultadoR, 0, NOT);
+	imprimirNaCaixa("R = ~R = ",resultadoR, 0,NOT, true);
+
 }
 
 void modoManual(void) {
