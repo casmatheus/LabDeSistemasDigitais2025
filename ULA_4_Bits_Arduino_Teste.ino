@@ -410,7 +410,19 @@ void modoManual(void) {
       Serial.println("Operacao invalida!");
       return;
   }
-
+//implementando o print da operacao de forma bonita
+  /*Serial.println(F("\t\t\t\t\t* * * * * * * * * * * * * * *"));
+  Serial.println(F("\t\t\t\t\t\t\t O P E R A Ç Ã O "));
+  Serial.println(F("\t\t\t\t\t* * * * * * * * * * * * * * *"));
+  Serial.print("\t\t\t\t\t\t"); Serial.print(entradaString); Serial.print(" | "); Serial.println(op);*/
+	
+ /*  Testando uma implementacao bonitinha pro resultado no modo manual, se funcionar apagar o de baixo*/	
+  /*Serial.println(F("\t\t\t\t+-------------------------------+"));
+  Serial.println(F("\t\t\t\t|       R E S U L T A D O       |"));
+  Serial.println(F("\t\t\t\t|           F I N A L           |"));
+  Serial.println(F("\t\t\t\t|-------------------------------|"));
+  Serial.print(F("\t\t\t\t")); printarResultado(saidaZ, Cout, operacao);*/
+	
   Serial.print("Operação: ");
   Serial.print(entradaString);
   Serial.print(" | ");
@@ -418,7 +430,7 @@ void modoManual(void) {
   Serial.print("\n");
 
 	//Exibindo resultado no monitor -> resultado: Cout Z3 Z2 Z1 Z0
-  Serial.println("Resultado:");
+    Serial.println("Resultado:");
 	printarResultado(saidaZ, Cout, operacao);
 	
   acenderLeds(saidaZ, Cout);
