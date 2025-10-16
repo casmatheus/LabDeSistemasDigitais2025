@@ -50,7 +50,7 @@ byte receberOperacao(char* entradaString);
 byte str2byte(char* str);
 byte str2dec(char* str);
 void readSerialInput(char* buffer, int bufferSize);
-void printarResultado(byte resultado, byte cout, byte operacao);
+void printarResultado(byte resultado, byte cout);
 void imprimirNaCaixa(String titulo, byte resultado, byte cout, Op operacao, bool isFinal);
 void modoManual(void);
 void modoAutomatico(void);
@@ -249,7 +249,7 @@ void waitButton(void) {
 }
 #endif
 
-void printarResultado(byte resultado, byte cout, byte operacao) {
+/*void printarResultado(byte resultado, byte cout, byte operacao) {
   Serial.print("Binário: ");
   Serial.print(cout);
   Serial.print(bitRead(resultado,3));
@@ -271,34 +271,98 @@ void printarResultado(byte resultado, byte cout, byte operacao) {
     else if (operacao == MUL)
       Serial.print("Teve Overflow");
     }
+}*/
+
+void printarResultado(byte resultado, byte cout) {
+  Serial.print(cout);
+  Serial.print(" "); // Um espaço para legibilidade
+  Serial.print(bitRead(resultado,3));
+  Serial.print(bitRead(resultado,2));
+  Serial.print(bitRead(resultado,1));
+  Serial.print(bitRead(resultado,0));
+  }
 }
-//Funcao que faz o design das caixas de resultado no modo automatico
+
 void imprimirNaCaixa(String titulo, byte resultado, byte cout, Op operacao, bool isFinal) {
+  // --- 1. PREPARAÇÃO DOS DADOS ---
+  int valorDecimal = (cout * 16) + resultado;
+
+  String linhaBinario = "Binario : ";
+  String linhaDecimal = "Decimal : " + String(valorDecimal);
+  String linhaStatus = "Status : ";
+
+  if (cout == 1) {
+    if (operacao == SUM)      linhaStatus += "Carry (Cout)";
+    else if (operacao == SUB) linhaStatus += "Borrow";
+    else if (operacao == MUL) linhaStatus += "Overflow";
+    else                      linhaStatus += "Cout";
+  } else {
+    linhaStatus += "OK";
+  }
+
+  // --- 2. DESENHO DA CAIXA ---
   if (!isFinal) {
-    //Caixa para os resultados intermediarios
-    Serial.println(F("")); // Espaçamento
+    // --- CAIXA SIMPLES ---
+    int larguraCaixa = 39; // Largura do conteúdo interno
+    Serial.println(F(""));
     Serial.println(F("\t+----------------------------------------+"));
+    
     Serial.print(F("\t| "));
     Serial.print(titulo);
-    printarResultado(resultado, cout, operacao);
-    Serial.println(F(" |"));
+    for (int i = 0; i < (larguraCaixa - titulo.length()); i++) { Serial.print(" "); }
+    Serial.println(F("|"));
+    
+    Serial.print(F("\t| "));
+    Serial.print(linhaBinario);
+    printarResultado(resultado, cout);
+    for (int i = 0; i < (larguraCaixa - (linhaBinario.length() + 6)); i++) { Serial.print(" "); } // "0 1111" tem 6 chars
+    Serial.println(F("|"));
+    
+    Serial.print(F("\t| "));
+    Serial.print(linhaDecimal);
+    for (int i = 0; i < (larguraCaixa - linhaDecimal.length()); i++) { Serial.print(" "); }
+    Serial.println(F("|"));
+    
+    Serial.print(F("\t| "));
+    Serial.print(linhaStatus);
+    for (int i = 0; i < (larguraCaixa - linhaStatus.length()); i++) { Serial.print(" "); }
+    Serial.println(F("|"));
+    
     Serial.println(F("\t+----------------------------------------+"));
+
   } else {
-    // Caixa para o resultado final
+    // --- CAIXA FINAL (com mais destaque) ---
+    int larguraCaixa = 47; // Caixa final é um pouco maior
     Serial.println(F(""));
-    Serial.println(F("\t     ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░")); 
+    Serial.println(F("\t     ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░"));
     Serial.println(F("\t=================================================="));
-    Serial.println(F("\t|                                                |"));
     Serial.println(F("\t|                R E S U L T A D O               |"));
     Serial.println(F("\t|                  F I N A L                     |"));
-    Serial.println(F("\t|                                                |"));
     Serial.println(F("\t+------------------------------------------------+"));
-    Serial.print(F("\t|  "));
+
+    Serial.print(F("\t| "));
     Serial.print(titulo);
-    printarResultado(resultado, cout, operacao);
-    Serial.println(F("  |"));
+    for (int i = 0; i < (larguraCaixa - titulo.length()); i++) { Serial.print(" "); }
+    Serial.println(F("|"));
+    
+    Serial.print(F("\t| "));
+    Serial.print(linhaBinario);
+    printarResultado(resultado, cout);
+    for (int i = 0; i < (larguraCaixa - (linhaBinario.length() + 6)); i++) { Serial.print(" "); }
+    Serial.println(F("|"));
+    
+    Serial.print(F("\t| "));
+    Serial.print(linhaDecimal);
+    for (int i = 0; i < (larguraCaixa - linhaDecimal.length()); i++) { Serial.print(" "); }
+    Serial.println(F("|"));
+
+    Serial.print(F("\t| "));
+    Serial.print(linhaStatus);
+    for (int i = 0; i < (larguraCaixa - linhaStatus.length()); i++) { Serial.print(" "); }
+    Serial.println(F("|"));
+
     Serial.println(F("\t=================================================="));
-    Serial.println(F("\t     ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒")); 
+    Serial.println(F("\t     ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒"));
     Serial.println(F(""));
   }
 }
@@ -411,27 +475,22 @@ void modoManual(void) {
       return;
   }
 //implementando o print da operacao de forma bonita
-  /*Serial.println(F("\t\t\t\t\t* * * * * * * * * * * * * * *"));
+  Serial.println(F("\t\t\t\t\t* * * * * * * * * * * * * * *"));
   Serial.println(F("\t\t\t\t\t\t\t O P E R A Ç Ã O "));
   Serial.println(F("\t\t\t\t\t* * * * * * * * * * * * * * *"));
-  Serial.print("\t\t\t\t\t\t"); Serial.print(entradaString); Serial.print(" | "); Serial.println(op);*/
-	
- /*  Testando uma implementacao bonitinha pro resultado no modo manual, se funcionar apagar o de baixo*/	
-  /*Serial.println(F("\t\t\t\t+-------------------------------+"));
-  Serial.println(F("\t\t\t\t|       R E S U L T A D O       |"));
-  Serial.println(F("\t\t\t\t|           F I N A L           |"));
-  Serial.println(F("\t\t\t\t|-------------------------------|"));
-  Serial.print(F("\t\t\t\t")); printarResultado(saidaZ, Cout, operacao);*/
-	
-  Serial.print("Operação: ");
-  Serial.print(entradaString);
-  Serial.print(" | ");
-  Serial.print(op);
-  Serial.print("\n");
+  Serial.print("\t\t\t\t\t\t"); Serial.print(entradaString); Serial.print(" | "); Serial.println(op);
+//print do resultado na caixa maneira
+  imprimirNaCaixa("",saidaZ,cout,operacao,true); //imprime o resultado nas caixinhas bonitas
+		
+	  /*Serial.print("Operação: ");
+	  Serial.print(entradaString);
+	  Serial.print(" | ");
+	  Serial.print(op);
+	  Serial.print("\n");
 
 	//Exibindo resultado no monitor -> resultado: Cout Z3 Z2 Z1 Z0
     Serial.println("Resultado:");
-	printarResultado(saidaZ, Cout, operacao);
+	printarResultado(saidaZ, Cout, operacao);*/
 	
   acenderLeds(saidaZ, Cout);
 
