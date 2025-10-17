@@ -267,7 +267,7 @@ void imprimirNaCaixa(String titulo, byte resultado, byte cout, byte operacao, bo
   if (cout == 1) {
     if (operacao == SUM)      linhaStatus += "Carry (Cout)";
     else if (operacao == SUB) linhaStatus += "Borrow";
-
+	  else if (operacao == MUL) linhaStatus += "Overflow";
     else                      linhaStatus += "Cout";
   } else {
     linhaStatus += "OK";
