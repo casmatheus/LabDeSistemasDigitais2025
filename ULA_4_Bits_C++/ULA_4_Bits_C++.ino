@@ -349,7 +349,7 @@ void modoAutomatico(void) {
 	
 	byte resultadoR = somador(entradaA, entradaB, cout);
 	imprimirNaCaixa("R = R + A = ",resultadoR, cout,SUM, false);
-	
+
 	resultadoR = multiplicador(resultadoR, resultadoR, cout);	        	
 	imprimirNaCaixa("R = R * R = ",resultadoR, cout,MUL, false);
 
@@ -376,6 +376,7 @@ void modoAutomatico(void) {
 
 	resultadoR = notOp(resultadoR);	
 	imprimirNaCaixa("R = ~R = ",resultadoR, 0,NOT, true);
+  acenderLeds(resultadoR, 0);
 
 }
 
