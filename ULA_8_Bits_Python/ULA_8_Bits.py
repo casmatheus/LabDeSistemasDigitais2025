@@ -2,6 +2,7 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
+from PIL import ImageTk, Image
 
 class ALU_8bit:
     """
@@ -85,8 +86,13 @@ class AluGUI:
         """Inicializa a interface gráfica."""
         self.root = root
         self.root.title("Simulador ULA 8-bits")
-        self.root.geometry("400x400")
-        self.root.resizable(False, False)
+        #icon = tk.PhotoImage(file='ULA.png')
+        #root.iconphoto(True, icon)
+        self.root.minsize(512, 270)
+        self.root.resizable(True, True)
+        self.root.rowconfigure(0, weight=1)
+        self.root.columnconfigure(0, weight=1)
+
 
         # Instancia a ULA
         self.alu = ALU_8bit()
@@ -103,45 +109,83 @@ class AluGUI:
             "7: DIV": self.alu.OP_DIV
         }
 
+        style = ttk.Style()
+        
+        # Define um tamanho de fonte padrão
+        default_font_size = 10 
+        default_font = ("Helvetica", default_font_size)
+        self.root.option_add('*TCombobox*Listbox.font', default_font)
+
+
+        style.configure(".", font=default_font) # '.' aplica a todos
+        style.configure("TButton", font=default_font)
+        style.configure("TLabel", font=default_font)
+        style.configure("TEntry", font=default_font)
+        style.configure("TCombobox", font=default_font)
+        
+        style.configure("TLabelframe", font=(default_font[0], default_font_size + 1, "bold"))
+        style.configure("TLabelframe.Label", font=(default_font[0], default_font_size + 1, "bold"))
+
+        style.configure("Result.TLabel", font=("Courier", default_font_size + 2))
+
         # --- Cria o frame principal ---
         main_frame = ttk.Frame(root, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        main_frame.columnconfigure(0, weight=1)
+
+        # --- Banner ---
+        img = Image.open('BannerUFRJ.png')
+        new_width = int(img.width * 0.65)
+        new_height = int(img.height * 0.65)
+        new_size = (new_width, new_height)
+        img = img.resize(new_size, Image.Resampling.LANCZOS)
+
+        self.banner_photo = ImageTk.PhotoImage(img)
+        banner_label = ttk.Label(main_frame, image=self.banner_photo)
+        row = 0
+        banner_label.grid(row=row, column=0, pady=(0, 0))
+
+        # --- Separador ---
+        row += 1
+        separator = ttk.Separator(main_frame, orient='horizontal')
+        separator.grid(row=row, column=0, sticky='ew', pady=5)
 
         # --- Seção de Entradas ---
+        row += 1
+        larguraEntrada = 5
         input_frame = ttk.LabelFrame(main_frame, text="Entradas", padding="10")
-        input_frame.grid(row=0, column=0, padx=5, pady=5, sticky=(tk.W, tk.E))
+        input_frame.grid(row=row, column=0, padx=5, pady=5)
         
         ttk.Label(input_frame, text="Entrada X (0-255):").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        self.x_entry = ttk.Entry(input_frame, width=10)
-        self.x_entry.grid(row=0, column=1, padx=5, pady=5)
+        self.x_entry = ttk.Entry(input_frame, width=larguraEntrada)
+        self.x_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
         self.x_entry.insert(0, "0")
 
         ttk.Label(input_frame, text="Entrada Y (0-255):").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-        self.y_entry = ttk.Entry(input_frame, width=10)
-        self.y_entry.grid(row=1, column=1, padx=5, pady=5)
+        self.y_entry = ttk.Entry(input_frame, width=larguraEntrada)
+        self.y_entry.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
         self.y_entry.insert(0, "0")
 
         ttk.Label(input_frame, text="Operação:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
         self.op_combo = ttk.Combobox(input_frame, values=list(self.op_map.keys()), state="readonly", width=15)
-        self.op_combo.grid(row=2, column=1, padx=5, pady=5)
-        self.op_combo.current(0) # Define "AND" como padrão
+        self.op_combo.grid(row=2, column=1, padx=5, pady=5, sticky=tk.W)
+        self.op_combo.current(0)
 
         # --- Botão de Execução ---
+        row += 1
         self.execute_button = ttk.Button(main_frame, text="Executar Operação", command=self.calcular)
-        self.execute_button.grid(row=1, column=0, padx=5, pady=10)
+        self.execute_button.grid(row=row, column=0, padx=5, pady=10)
 
         # --- Seção de Saídas ---
+        row += 1
         output_frame = ttk.LabelFrame(main_frame, text="Saídas", padding="10")
-        output_frame.grid(row=2, column=0, padx=5, pady=5, sticky=(tk.W, tk.E))
+        output_frame.grid(row=row, column=0, padx=5, pady=5)
 
         # Variáveis para atualizar os labels de resultado
         self.z_dec_var = tk.StringVar(value="Decimal: -")
         self.z_hex_var = tk.StringVar(value="Hex: -")
         self.z_bin_var = tk.StringVar(value="Binário: -")
         self.flag_var = tk.StringVar(value="Flag: -")
-
-        style = ttk.Style()
-        style.configure("Result.TLabel", font=("Courier", 12))
 
         ttk.Label(output_frame, textvariable=self.z_dec_var, style="Result.TLabel").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
         ttk.Label(output_frame, textvariable=self.z_hex_var, style="Result.TLabel").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
