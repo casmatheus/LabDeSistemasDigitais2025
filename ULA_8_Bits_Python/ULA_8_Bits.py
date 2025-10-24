@@ -165,20 +165,20 @@ class AluGUI:
         input_frame = ttk.LabelFrame(main_frame, text="Entradas", padding="10", labelanchor='n')
         input_frame.grid(row=row, column=0, padx=5, pady=5)
         
-        ttk.Label(input_frame, text="Entrada X (0-255):").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(input_frame, text="Entrada X (8 Bits):").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
         self.x_entry = ttk.Entry(input_frame, width=larguraEntrada)
         self.x_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
-        self.x_entry.insert(0, "0")
-        self.x = tk.StringVar(value=f"({0:08b})")
+        self.x_entry.insert(0, f"{0:08b}")
+        self.x = tk.StringVar(value="(Decimal: 0)")
         self.x_entry.bind("<FocusOut>", self.atualizarStringsDasCaixas)
         ttk.Label(input_frame, textvariable=self.x).grid(row=0, column=2, padx=5, pady=5, sticky=tk.W)
 
 
-        ttk.Label(input_frame, text="Entrada Y (0-255):").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(input_frame, text="Entrada Y (8 Bits):").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
         self.y_entry = ttk.Entry(input_frame, width=larguraEntrada)
         self.y_entry.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
-        self.y_entry.insert(0, "0")
-        self.y = tk.StringVar(value=f"({0:08b})")
+        self.y_entry.insert(0, f"{0:08b}")
+        self.y = tk.StringVar(value="(Decimal: 0)")
         self.y_entry.bind("<FocusOut>", self.atualizarStringsDasCaixas)
         ttk.Label(input_frame, textvariable=self.y).grid(row=1, column=2, padx=5, pady=5, sticky=tk.W)
 
@@ -213,18 +213,46 @@ class AluGUI:
         ttk.Label(output_frame, textvariable=self.flag_var, style="Result.TLabel").grid(row=3, column=0, padx=5, pady=10, sticky=tk.W)
 
         self.tocarAudio("insiraEntrada.mp3")
-
+    
     def atualizarStringsDasCaixas(self, event):
-        x = int(self.x_entry.get())
-        y = int(self.y_entry.get())
-        self.x.set(f"({x:08b})")
-        self.y.set(f"({y:08b})")
+        self.receberEAtualizarEntradas()
+        return
+    
+
+    def receberEAtualizarEntradas(self):
+        """Valida, formata e atualiza os campos de entrada X e Y."""
+        
+        try:
+            x_str = self.x_entry.get()
+            x = int(x_str, 2)
+            if not (0 <= x <= 255): # Garante que está no range de 8 bits
+                x = 0 # Reseta se for inválido (ex: "111111111")
+        except ValueError:
+            x = 0 # Reseta se for inválido (ex: "110a11")
+        
+        # Formata de volta para 8 bits e atualiza a caixa de entrada
+        self.x_entry.delete(0, tk.END)
+        self.x_entry.insert(0, f"{x:08b}")
+        self.x.set(f"(Decimal: {x})") # Atualiza o label decimal
+
+        # --- Processar Y ---
+        try:
+            y_str = self.y_entry.get()
+            y = int(y_str, 2) # Tenta converter de binário
+            if not (0 <= y <= 255):
+                y = 0
+        except ValueError:
+            y = 0
+        
+        self.y_entry.delete(0, tk.END)
+        self.y_entry.insert(0, f"{y:08b}")
+        self.y.set(f"(Decimal: {y})")
 
         op_nome = self.op_combo.get()
         opcode = self.op_map[op_nome]
         self.comboStr.set(f"({opcode:03b})")
 
-        return
+        return (x, y, opcode)
 
     def tocarAudio(self, path):
         self.audioFila.append(path)
@@ -257,22 +285,9 @@ class AluGUI:
 
     def calcular(self):
         """Pega as entradas, executa a ULA e atualiza as saídas."""
+
         try:
-            # 1. Obter e validar entradas
-            x = int(self.x_entry.get())
-            y = int(self.y_entry.get())
-
-            if not (0 <= x <= 255 and 0 <= y <= 255):
-                messagebox.showerror("Erro de Entrada", "As entradas X e Y devem estar entre 0 e 255.")
-                return
-
-
-            self.x.set(f"({x:08b})")
-            self.y.set(f"({y:08b})")
-            
-            op_nome = self.op_combo.get()
-            opcode = self.op_map[op_nome]
-            self.comboStr.set(f"({opcode:03b})")
+            x, y, opcode = self.receberEAtualizarEntradas()
 
             # 2. Executar a ULA
             Z, F = self.alu.execute(x, y, opcode)
