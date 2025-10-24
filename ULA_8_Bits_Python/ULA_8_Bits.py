@@ -99,15 +99,17 @@ class AluGUI:
 
         # Mapeamento de operações para o dropdown
         self.op_map = {
-            "0: AND": self.alu.OP_AND,
-            "1: OR":  self.alu.OP_OR,
-            "2: NOT (em Y)": self.alu.OP_NOT,
-            "3: XOR": self.alu.OP_XOR,
-            "4: ADD": self.alu.OP_ADD,
-            "5: SUB": self.alu.OP_SUB,
-            "6: MUL": self.alu.OP_MUL,
-            "7: DIV": self.alu.OP_DIV
+            "0: And": self.alu.OP_AND,
+            "1: Or":  self.alu.OP_OR,
+            "2: Not (em Y)": self.alu.OP_NOT,
+            "3: Xor": self.alu.OP_XOR,
+            "4: Adição": self.alu.OP_ADD,
+            "5: Subtração": self.alu.OP_SUB,
+            "6: Multiplicação": self.alu.OP_MUL,
+            "7: Divisão": self.alu.OP_DIV
         }
+        self.x = 0
+        self.y = 0
 
         style = ttk.Style()
         
@@ -152,24 +154,35 @@ class AluGUI:
 
         # --- Seção de Entradas ---
         row += 1
-        larguraEntrada = 5
-        input_frame = ttk.LabelFrame(main_frame, text="Entradas", padding="10")
+        larguraEntrada = 10
+        input_frame = ttk.LabelFrame(main_frame, text="Entradas", padding="10", labelanchor='n')
         input_frame.grid(row=row, column=0, padx=5, pady=5)
         
         ttk.Label(input_frame, text="Entrada X (0-255):").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
         self.x_entry = ttk.Entry(input_frame, width=larguraEntrada)
         self.x_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
         self.x_entry.insert(0, "0")
+        self.x = tk.StringVar(value=f"({0:08b})")
+        self.x_entry.bind("<FocusOut>", self.atualizarStringsDasCaixas)
+        ttk.Label(input_frame, textvariable=self.x).grid(row=0, column=2, padx=5, pady=5, sticky=tk.W)
+
 
         ttk.Label(input_frame, text="Entrada Y (0-255):").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
         self.y_entry = ttk.Entry(input_frame, width=larguraEntrada)
         self.y_entry.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
         self.y_entry.insert(0, "0")
+        self.y = tk.StringVar(value=f"({0:08b})")
+        self.y_entry.bind("<FocusOut>", self.atualizarStringsDasCaixas)
+        ttk.Label(input_frame, textvariable=self.y).grid(row=1, column=2, padx=5, pady=5, sticky=tk.W)
 
         ttk.Label(input_frame, text="Operação:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
         self.op_combo = ttk.Combobox(input_frame, values=list(self.op_map.keys()), state="readonly", width=15)
         self.op_combo.grid(row=2, column=1, padx=5, pady=5, sticky=tk.W)
         self.op_combo.current(0)
+        self.comboStr = tk.StringVar(value=f"({0:03b})")
+        self.op_combo.bind("<FocusOut>", self.atualizarStringsDasCaixas)
+        ttk.Label(input_frame, textvariable=self.comboStr).grid(row=2, column=2, padx=5, pady=5, sticky=tk.W)
+
 
         # --- Botão de Execução ---
         row += 1
@@ -178,7 +191,7 @@ class AluGUI:
 
         # --- Seção de Saídas ---
         row += 1
-        output_frame = ttk.LabelFrame(main_frame, text="Saídas", padding="10")
+        output_frame = ttk.LabelFrame(main_frame, text="Saídas", padding="10", labelanchor='n')
         output_frame.grid(row=row, column=0, padx=5, pady=5)
 
         # Variáveis para atualizar os labels de resultado
@@ -192,19 +205,37 @@ class AluGUI:
         ttk.Label(output_frame, textvariable=self.z_bin_var, style="Result.TLabel").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
         ttk.Label(output_frame, textvariable=self.flag_var, style="Result.TLabel").grid(row=3, column=0, padx=5, pady=10, sticky=tk.W)
 
+    def atualizarStringsDasCaixas(self, event):
+        x = int(self.x_entry.get())
+        y = int(self.y_entry.get())
+        self.x.set(f"({x:08b})")
+        self.y.set(f"({y:08b})")
+
+        op_nome = self.op_combo.get()
+        opcode = self.op_map[op_nome]
+        self.comboStr.set(f"({opcode:03b})")
+
+        return
+
+
     def calcular(self):
         """Pega as entradas, executa a ULA e atualiza as saídas."""
         try:
             # 1. Obter e validar entradas
             x = int(self.x_entry.get())
             y = int(self.y_entry.get())
-            
+
             if not (0 <= x <= 255 and 0 <= y <= 255):
                 messagebox.showerror("Erro de Entrada", "As entradas X e Y devem estar entre 0 e 255.")
                 return
 
+
+            self.x.set(f"({x:08b})")
+            self.y.set(f"({y:08b})")
+            
             op_nome = self.op_combo.get()
             opcode = self.op_map[op_nome]
+            self.comboStr.set(f"({opcode:03b})")
 
             # 2. Executar a ULA
             Z, F = self.alu.execute(x, y, opcode)
