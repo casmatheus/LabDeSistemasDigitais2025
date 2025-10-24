@@ -352,6 +352,16 @@ class AluGUI:
         except Exception as e:
             messagebox.showerror("Erro Inesperado", f"Ocorreu um erro: {e}")
 
+
+
+
+def interfaceTerminal():
+    with open("UFRJascii.txt", "r", encoding="utf-8") as f:
+        banner = f.read()
+        print(banner)
+
+
+
 if __name__ == "__main__":
 
     print("")
@@ -367,9 +377,5 @@ if __name__ == "__main__":
         app = AluGUI(root)
         root.mainloop()
     elif (escolha == "Terminal"):
-
-        with open("UFRJascii.txt", "r", encoding="utf-8") as f:
-            banner = f.read()
-            print(banner)
-        
+        interfaceTerminal()
 
