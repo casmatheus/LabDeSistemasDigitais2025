@@ -3,7 +3,48 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 from PIL import ImageTk, Image
+import os
+import warnings
+
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "1"
+warnings.filterwarnings('ignore', category=UserWarning, module='pygame.pkgdata')
 import pygame
+
+
+def inputLoop(msg, tipo=str, min_v=None, max_v=None):
+    while (1):
+        entrada = input(msg).strip()
+        
+        if (not entrada):
+            print("Erro, entrada vazia. Tente novamente.\n")
+            continue
+        
+        try:
+            entrada = tipo(entrada)
+        except ValueError:
+            print(f"Erro, entrada deve ser do tipo {tipo.__name__}. Tente novamente.\n")
+            continue
+        
+        if ((min_v is not None) and (entrada < min_v)):
+            print(f"Entrada deve ser maior ou igual a {min_v}. Tente novamente.\n")
+            continue
+        if ((max_v is not None) and (entrada > max_v)):
+            print(f"Entrada deve ser menor ou igual a {max_v}. Tente novamente.\n")
+            continue
+        
+        return entrada
+
+
+# Pede para o usuário escolher um item em uma lista
+def inputEscolha(msg, lista):
+    for i, item in enumerate(lista):
+        print(f"{i + 1}) {item}")
+
+    i_escolhido = inputLoop(msg, tipo=int, min_v=1, max_v=len(lista)) - 1
+    item_escolhido = lista[i_escolhido]
+
+    return item_escolhido 
+
 
 class ALU_8bit:
     """
@@ -312,10 +353,23 @@ class AluGUI:
             messagebox.showerror("Erro Inesperado", f"Ocorreu um erro: {e}")
 
 if __name__ == "__main__":
-    # Inicia o modulo de audio
-    pygame.mixer.init()
 
-    # Inicia a aplicação gráfica
-    root = tk.Tk()
-    app = AluGUI(root)
-    root.mainloop()
+    print("")
+    escolha = inputEscolha("Escolha o tipo de Interface: ",
+                            ["Gráfica", "Terminal"])
+
+    if (escolha == "Gráfica"):
+        # Inicia o modulo de audio
+        pygame.mixer.init()
+
+        # Inicia a aplicação gráfica
+        root = tk.Tk()
+        app = AluGUI(root)
+        root.mainloop()
+    elif (escolha == "Terminal"):
+
+        with open("UFRJascii.txt", "r", encoding="utf-8") as f:
+            banner = f.read()
+            print(banner)
+        
+
