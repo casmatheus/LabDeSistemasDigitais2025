@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 from PIL import ImageTk, Image
+import pygame
 
 class ALU_8bit:
     """
@@ -84,6 +85,10 @@ class ALU_8bit:
 class AluGUI:
     def __init__(self, root):
         """Inicializa a interface gráfica."""
+        
+        self.audioFila = []
+        self.tocandoAudio = False
+
         self.root = root
         self.root.title("Simulador ULA 8-bits")
         #icon = tk.PhotoImage(file='ULA.png')
@@ -96,6 +101,8 @@ class AluGUI:
 
         # Instancia a ULA
         self.alu = ALU_8bit()
+
+        self.tocarAudio('BemVindo.mp3')
 
         # Mapeamento de operações para o dropdown
         self.op_map = {
@@ -205,6 +212,8 @@ class AluGUI:
         ttk.Label(output_frame, textvariable=self.z_bin_var, style="Result.TLabel").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
         ttk.Label(output_frame, textvariable=self.flag_var, style="Result.TLabel").grid(row=3, column=0, padx=5, pady=10, sticky=tk.W)
 
+        self.tocarAudio("insiraEntrada.mp3")
+
     def atualizarStringsDasCaixas(self, event):
         x = int(self.x_entry.get())
         y = int(self.y_entry.get())
@@ -216,6 +225,34 @@ class AluGUI:
         self.comboStr.set(f"({opcode:03b})")
 
         return
+
+    def tocarAudio(self, path):
+        self.audioFila.append(path)
+        
+        if not self.tocandoAudio:
+            self.processarFilaDeAudio()
+
+    def processarFilaDeAudio(self):
+        if not self.audioFila:
+            self.is_playing_audio = False
+            return
+        
+        if self.tocandoAudio:
+            return
+
+        self.tocandoAudio = True
+        path = self.audioFila.pop(0)
+        pygame.mixer.music.load(path)
+        pygame.mixer.music.play()
+        self.audioTerminado()
+
+
+    def audioTerminado(self):
+        if pygame.mixer.music.get_busy():
+            self.root.after(100, self.audioTerminado)
+        else:
+            self.tocandoAudio = False
+            self.processarFilaDeAudio()
 
 
     def calcular(self):
@@ -260,6 +297,9 @@ class AluGUI:
             messagebox.showerror("Erro Inesperado", f"Ocorreu um erro: {e}")
 
 if __name__ == "__main__":
+    # Inicia o modulo de audio
+    pygame.mixer.init()
+
     # Inicia a aplicação gráfica
     root = tk.Tk()
     app = AluGUI(root)
