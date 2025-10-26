@@ -13,6 +13,19 @@ import pygame
 
 HABILITAR_AUDIO = 0
 
+OP_AND = 0b000
+OP_OR  = 0b001
+OP_NOT = 0b010
+OP_XOR = 0b011
+OP_ADD = 0b100
+OP_SUB = 0b101
+OP_MUL = 0b110
+OP_DIV = 0b111
+
+
+
+
+
 
 def inputLoop(msg, tipo=str, min_v=None, max_v=None):
     while (1):
@@ -49,13 +62,35 @@ def inputEscolha(msg, lista):
     return item_escolhido 
 
 
+def op2str(A, B, opcode):
+    if opcode == OP_AND:
+        return f"{A} & {B}"
+    elif opcode == OP_OR:
+        return f"{A} | {B}"
+    elif opcode == OP_NOT:
+        return f"~{B}"
+    elif opcode == OP_XOR:
+        return f"{A} xor {B}"
+    elif opcode == OP_ADD:
+        return f"{A} + {B}"
+    elif opcode == OP_SUB:
+        return f"{A} - {B}"
+    elif opcode == OP_MUL:
+        return f"{A} * {B}"
+    elif opcode == OP_DIV:
+        return f"{A} / {B}"
+    else:
+        return ""
+
+
+
 class ALU_8bit:
     """
     Operações da ULA:
 
     - 000 (0): AND
     - 001 (1): OR
-    - 010 (2): NOT (aplicado na entrada Y)
+    - 010 (2): NOT (aplicado na entrada B)
     - 011 (3): XOR
     - 100 (4): ADD (Soma)
     - 101 (5): SUB (Subtração)
@@ -63,19 +98,10 @@ class ALU_8bit:
     - 111 (7): DIV (Divisão inteira)
     """
 
-    # --- Definição dos Opcodes ---
-    OP_AND = 0b000
-    OP_OR  = 0b001
-    OP_NOT = 0b010
-    OP_XOR = 0b011
-    OP_ADD = 0b100
-    OP_SUB = 0b101
-    OP_MUL = 0b110
-    OP_DIV = 0b111
-
     def __init__(self):
         """Inicializa a ULA."""
         self.MASK = 0xFF  # (binário: 11111111)
+
 
     def execute(self, X: int, Y: int, opcode: int):
         """
@@ -87,30 +113,30 @@ class ALU_8bit:
         result = 0
         flag = 0
 
-        if opcode == self.OP_AND:
+        if opcode == OP_AND:
             result = X & Y
             flag = 0
-        elif opcode == self.OP_OR:
+        elif opcode == OP_OR:
             result = X | Y
             flag = 0
-        elif opcode == self.OP_NOT:
+        elif opcode == OP_NOT:
             result = (~Y) & self.MASK
             flag = 0
-        elif opcode == self.OP_XOR:
+        elif opcode == OP_XOR:
             result = X ^ Y
             flag = 0
-        elif opcode == self.OP_ADD:
+        elif opcode == OP_ADD:
             temp_sum = X + Y
             result = temp_sum & self.MASK
             flag = 1 if temp_sum > self.MASK else 0 # Flag = Carry Out
-        elif opcode == self.OP_SUB:
+        elif opcode == OP_SUB:
             result = (X - Y) & self.MASK
             flag = 1 if X < Y else 0 # Flag = Borrow
-        elif opcode == self.OP_MUL:
+        elif opcode == OP_MUL:
             temp_mul = X * Y
             result = temp_mul & self.MASK
             flag = 1 if temp_mul > self.MASK else 0 # Flag = Overflow
-        elif opcode == self.OP_DIV:
+        elif opcode == OP_DIV:
             if Y == 0:
                 result = 0 
                 flag = 1   # Flag indica erro de divisão por zero
@@ -126,6 +152,10 @@ class ALU_8bit:
 # --- CLASSE DA INTERFACE GRÁFICA (GUI) ---
 #
 class AluGUI:
+
+    MODO_MANUAL = '1'
+    MODO_AUTOMATICO = '2'
+
     def __init__(self, root):
         """Inicializa a interface gráfica."""
         
@@ -140,23 +170,23 @@ class AluGUI:
         self.root.columnconfigure(0, weight=1)
         self.root.attributes('-topmost', True)
 
-
-
         # Instancia a ULA
         self.alu = ALU_8bit()
 
         self.tocarAudio('BemVindo.mp3')
+        
+        self.modo = tk.StringVar(value=self.MODO_MANUAL)
 
         # Mapeamento de operações para o dropdown
         self.op_map = {
-            "000: And": self.alu.OP_AND,
-            "001: Or":  self.alu.OP_OR,
-            "010: Not (em Y)": self.alu.OP_NOT,
-            "011: Xor": self.alu.OP_XOR,
-            "100: Adição": self.alu.OP_ADD,
-            "101: Subtração": self.alu.OP_SUB,
-            "110: Multiplicação": self.alu.OP_MUL,
-            "111: Divisão": self.alu.OP_DIV
+            "000: And": OP_AND,
+            "001: Or":  OP_OR,
+            "010: Not (em B)": OP_NOT,
+            "011: Xor": OP_XOR,
+            "100: Adição": OP_ADD,
+            "101: Subtração": OP_SUB,
+            "110: Multiplicação": OP_MUL,
+            "111: Divisão": OP_DIV
         }
         self.x = 0
         self.y = 0
@@ -200,36 +230,46 @@ class AluGUI:
         separator = ttk.Separator(main_frame, orient='horizontal')
         separator.grid(row=row, column=0, sticky='ew', pady=5)
 
+        # --- Ecolha de MODO ---
+        row += 1
+        self.mode_frame = ttk.LabelFrame(main_frame, text="Modo de Operação", padding="10", labelanchor='n')
+        self.mode_frame.grid(row=row, column=0, padx=5, pady=5, sticky="ew")
+        
+        ttk.Radiobutton(self.mode_frame, text="Modo Manual", variable=self.modo, 
+                        value=self.MODO_MANUAL, command=self.atualizarBotoesEntrada).pack(side=tk.LEFT, padx=50)
+        ttk.Radiobutton(self.mode_frame, text="Modo Automático", variable=self.modo, 
+                        value=self.MODO_AUTOMATICO, command=self.atualizarBotoesEntrada).pack(side=tk.RIGHT, padx=50)
+
         # --- Seção de Entradas ---
         row += 1
         larguraEntrada = 10
-        input_frame = ttk.LabelFrame(main_frame, text="Entradas", padding="10", labelanchor='n')
-        input_frame.grid(row=row, column=0, padx=5, pady=5)
+        self.input_frame = ttk.LabelFrame(main_frame, text="Entradas", padding="10", labelanchor='n')
+        self.input_frame.grid(row=row, column=0, padx=5, pady=5)
         
-        ttk.Label(input_frame, text="Entrada X (8 Bits):").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        self.x_entry = ttk.Entry(input_frame, width=larguraEntrada)
+        ttk.Label(self.input_frame, text="Entrada A (8 Bits):").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.x_entry = ttk.Entry(self.input_frame, width=larguraEntrada)
         self.x_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
         self.x_entry.insert(0, f"{0:08b}")
         self.x = tk.StringVar(value="(Decimal: 0)")
         self.x_entry.bind("<FocusOut>", self.atualizarStringsDasCaixas)
-        ttk.Label(input_frame, textvariable=self.x).grid(row=0, column=2, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(self.input_frame, textvariable=self.x).grid(row=0, column=2, padx=5, pady=5, sticky=tk.W)
 
 
-        ttk.Label(input_frame, text="Entrada Y (8 Bits):").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-        self.y_entry = ttk.Entry(input_frame, width=larguraEntrada)
+        ttk.Label(self.input_frame, text="Entrada B (8 Bits):").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        self.y_entry = ttk.Entry(self.input_frame, width=larguraEntrada)
         self.y_entry.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
         self.y_entry.insert(0, f"{0:08b}")
         self.y = tk.StringVar(value="(Decimal: 0)")
         self.y_entry.bind("<FocusOut>", self.atualizarStringsDasCaixas)
-        ttk.Label(input_frame, textvariable=self.y).grid(row=1, column=2, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(self.input_frame, textvariable=self.y).grid(row=1, column=2, padx=5, pady=5, sticky=tk.W)
 
-        ttk.Label(input_frame, text="Operação:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
-        self.op_combo = ttk.Combobox(input_frame, values=list(self.op_map.keys()), state="readonly", width=15)
+        ttk.Label(self.input_frame, text="Operação:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
+        self.op_combo = ttk.Combobox(self.input_frame, values=list(self.op_map.keys()), state="readonly", width=15)
         self.op_combo.grid(row=2, column=1, padx=5, pady=5, sticky=tk.W)
         self.op_combo.current(0)
         self.comboStr = tk.StringVar(value=f"({0:03b})")
         self.op_combo.bind("<FocusOut>", self.atualizarStringsDasCaixas)
-        ttk.Label(input_frame, textvariable=self.comboStr).grid(row=2, column=2, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(self.input_frame, textvariable=self.comboStr).grid(row=2, column=2, padx=5, pady=5, sticky=tk.W)
 
 
         # --- Botão de Execução ---
@@ -243,25 +283,47 @@ class AluGUI:
         output_frame.grid(row=row, column=0, padx=5, pady=5)
 
         # Variáveis para atualizar os labels de resultado
+        self.z_op_var  = tk.StringVar(value="Operação: -")
         self.z_dec_var = tk.StringVar(value="Decimal: -")
         self.z_hex_var = tk.StringVar(value="Hex: -")
         self.z_bin_var = tk.StringVar(value="Binário: -")
-        self.flag_var = tk.StringVar(value="Flag: -")
+        self.flag_var  = tk.StringVar(value="Flag: -")
 
-        ttk.Label(output_frame, textvariable=self.z_dec_var, style="Result.TLabel").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Label(output_frame, textvariable=self.z_hex_var, style="Result.TLabel").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Label(output_frame, textvariable=self.z_bin_var, style="Result.TLabel").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Label(output_frame, textvariable=self.flag_var, style="Result.TLabel").grid(row=3, column=0, padx=5, pady=10, sticky=tk.W)
+        ttk.Label(output_frame, textvariable=self.z_op_var, style="Result.TLabel").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(output_frame, textvariable=self.z_dec_var, style="Result.TLabel").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(output_frame, textvariable=self.z_hex_var, style="Result.TLabel").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(output_frame, textvariable=self.z_bin_var, style="Result.TLabel").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(output_frame, textvariable=self.flag_var, style="Result.TLabel").grid(row=4, column=0, padx=5, pady=10, sticky=tk.W)
 
         self.tocarAudio("insiraEntrada.mp3")
     
+
+    def atualizarBotoesEntrada(self):
+        """
+        Habilita ou desabilita botoões da entrada baseado no modo 
+        """
+        modoAtual = self.modo.get()
+        print(self.modo)
+    
+        if modoAtual == self.MODO_AUTOMATICO:
+            estadoNovo = "disabled"
+        else:
+            estadoNovo = "normal"
+    
+        # Loop que passa por todos os botões da entrada
+        for widget in self.input_frame.winfo_children():
+            try:
+                widget.config(state=estadoNovo)
+            except tk.TclError:
+                pass
+
+
     def atualizarStringsDasCaixas(self, event):
         self.receberEAtualizarEntradas()
         return
-    
 
     def receberEAtualizarEntradas(self):
-        """Valida, formata e atualiza os campos de entrada X e Y."""
+        """Valida, formata e atualiza os campos de entrada A e B."""
         
         try:
             x_str = self.x_entry.get()
@@ -276,7 +338,7 @@ class AluGUI:
         self.x_entry.insert(0, f"{x:08b}")
         self.x.set(f"(Decimal: {x})") # Atualiza o label decimal
 
-        # --- Processar Y ---
+        # --- Processar B ---
         try:
             y_str = self.y_entry.get()
             y = int(y_str, 2) # Tenta converter de binário
@@ -337,21 +399,22 @@ class AluGUI:
             Z, F = self.alu.execute(x, y, opcode)
 
             # 3. Atualizar as Saídas
+            self.z_op_var.set(f"R = {op2str('A', 'B', opcode)}")
             self.z_dec_var.set(f"Decimal: {Z}")
             self.z_hex_var.set(f"Hex:     0x{Z:02X}")
             self.z_bin_var.set(f"Binário: {Z:08b}")
             
             # 4. Atualizar a Flag
             flag_nome = "Flag"
-            if opcode == self.alu.OP_ADD and F == 1: flag_nome = "Carry"
-            elif opcode == self.alu.OP_SUB and F == 1: flag_nome = "Borrow"
-            elif opcode == self.alu.OP_MUL and F == 1: flag_nome = "Overflow"
-            elif opcode == self.alu.OP_DIV and F == 1: flag_nome = "Div por Zero"
+            if opcode == OP_ADD and F == 1: flag_nome = "Carry"
+            elif opcode == OP_SUB and F == 1: flag_nome = "Borrow"
+            elif opcode == OP_MUL and F == 1: flag_nome = "Overflow"
+            elif opcode == OP_DIV and F == 1: flag_nome = "Div por Zero"
             
             self.flag_var.set(f"Flag ({flag_nome}): {F}")
 
         except ValueError:
-            messagebox.showerror("Erro de Entrada", "As entradas X e Y devem ser números inteiros.")
+            messagebox.showerror("Erro de Entrada", "As entradas A e B devem ser números inteiros.")
         except Exception as e:
             messagebox.showerror("Erro Inesperado", f"Ocorreu um erro: {e}")
 
