@@ -1,10 +1,11 @@
-import sys
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 from PIL import ImageTk, Image
 import os
 import warnings
+import pyfirmata2 as pyfirmata
+import time
 
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "1"
 warnings.filterwarnings('ignore', category=UserWarning, module='pygame.pkgdata')
@@ -77,7 +78,90 @@ def op2str(A, B, opcode):
     else:
         return ""
 
+class Arduino:
+    """
+    Classe que define a comunicação com a Arduino
+    """
+    
+    PORT = "COM3"
+    pinoBotao = 8
+    pinoLedCout = 13
+    pinoLedZ3 = 9
+    pinoLedZ2 = 10
+    pinoLedZ1 = 11
+    pinoLedZ0 = 12
+    
 
+    def __init__(self, root = None):
+        """
+        Inicializa Comunicação
+        """
+    
+        self.root = root
+        self.callbackBotao = None
+        self.estadoAnteriorBotao = True # Solto
+
+        self.erro = 0
+        self.desabilitar = 0
+
+        try:
+            self.board = pyfirmata.Arduino(self.PORT)
+        
+            self.it = pyfirmata.util.Iterator(self.board)
+            self.it.start()
+            
+            # Digital : Numero Do Pino : Input 
+            self.botao = self.board.get_pin(f"d:{self.pinoBotao}:i")
+            self.botao.mode = pyfirmata.INPUT_PULLUP
+            self.botao.enable_reporting()
+            
+            # Digital : Numero do Pino : Output
+            self.ledCout = self.board.get_pin(f"d:{self.pinoLedCout}:o")
+            self.led3 = self.board.get_pin(f"d:{self.pinoLedZ3}:o")
+            self.led2 = self.board.get_pin(f"d:{self.pinoLedZ2}:o")
+            self.led1 = self.board.get_pin(f"d:{self.pinoLedZ1}:o")
+            self.led0 = self.board.get_pin(f"d:{self.pinoLedZ0}:o")
+
+            time.sleep(0.1)
+
+        except pyfirmata.serial.SerialException as e:
+            print(f"Erro, não foi possível se conectar ao port {self.PORT}. {e}")
+            self.erro = 1
+            self.desabilitar = 1
+
+    def relacionarComBotaoGUI(self, callback):
+        """
+        Faz a relação entre um botão físico e uma função
+        OBS: Funciona somente na aplicação Gráfica
+        """
+
+        if self.desabilitar == 1:
+            return
+
+        self.callbackBotao = callback
+        self.esperarBotaoEmLoop()
+
+    def esperarBotaoEmLoop(self):
+        """ Loop interno para Espera do botão, (não chamar diretamente) """
+
+        try:
+            estadoAtual = self.botao.value
+
+            if estadoAtual is None:
+                self.root.after(50, self.esperarBotaoEmLoop)
+                return
+
+            # Botão vai de solto para pressionado
+            if self.estadoAnteriorBotao == True and estadoAtual == False:
+                self.callbackBotao()
+
+            self.estadoAnteriorBotao = estadoAtual
+
+            self.root.after(50, self.esperarBotaoEmLoop)
+        except Exception as e:
+            print(f"Erro, não foi possível verificar botão: {e}")
+            self.erro = 1
+            self.desabilitar = 1
 
 class ALU_8bit:
     """
@@ -95,7 +179,7 @@ class ALU_8bit:
 
     def __init__(self):
         """Inicializa a ULA."""
-        self.MASK = 0xFF  # (binário: 11111111)
+        self.MASK = 0xFF
 
 
     def execute(self, X: int, Y: int, opcode: int):
@@ -165,12 +249,17 @@ class AluGUI:
         self.root.columnconfigure(0, weight=1)
         self.root.attributes('-topmost', True)
 
-        # Instancia a ULA
+        # Instancia a ULA e Comunicação com Arduino
         self.alu = ALU_8bit()
+
+        self.arduino = Arduino(root)
+        if not self.arduino.erro:
+            self.arduino.relacionarComBotaoGUI(self.calcular)
 
         self.tocarAudio('BemVindo.mp3')
         
         self.modo = tk.StringVar(value=self.MODO_MANUAL)
+
 
         # Mapeamento de operações para o dropdown
         self.op_map = {
@@ -183,6 +272,7 @@ class AluGUI:
             "110: Multiplicação": OP_MUL,
             "111: Divisão": OP_DIV
         }
+
         self.x = 0
         self.y = 0
         self.z = 0
@@ -472,13 +562,10 @@ class AluGUI:
             self.etapaAutomatica += 1
 
 
-
 def interfaceTerminal():
     with open("UFRJascii.txt", "r", encoding="utf-8") as f:
         banner = f.read()
         print(banner)
-
-
 
 if __name__ == "__main__":
 
