@@ -115,7 +115,6 @@ class ALU_8bit:
                 result = (X // Y) & self.MASK 
                 flag = 0
         else:
-            print(f"Erro: Opcode {opcode} inválido.", file=sys.stderr)
             flag = 1 # Flag de erro geral
 
         return result, flag
@@ -147,21 +146,19 @@ class AluGUI:
 
         # Mapeamento de operações para o dropdown
         self.op_map = {
-            "0: And": self.alu.OP_AND,
-            "1: Or":  self.alu.OP_OR,
-            "2: Not (em Y)": self.alu.OP_NOT,
-            "3: Xor": self.alu.OP_XOR,
-            "4: Adição": self.alu.OP_ADD,
-            "5: Subtração": self.alu.OP_SUB,
-            "6: Multiplicação": self.alu.OP_MUL,
-            "7: Divisão": self.alu.OP_DIV
+            "000: And": self.alu.OP_AND,
+            "001: Or":  self.alu.OP_OR,
+            "010: Not (em Y)": self.alu.OP_NOT,
+            "011: Xor": self.alu.OP_XOR,
+            "100: Adição": self.alu.OP_ADD,
+            "101: Subtração": self.alu.OP_SUB,
+            "110: Multiplicação": self.alu.OP_MUL,
+            "111: Divisão": self.alu.OP_DIV
         }
         self.x = 0
         self.y = 0
 
         style = ttk.Style()
-        
-        # Define um tamanho de fonte padrão
         default_font_size = 10 
         default_font = ("Helvetica", default_font_size)
         self.root.option_add('*TCombobox*Listbox.font', default_font)
@@ -378,4 +375,5 @@ if __name__ == "__main__":
         root.mainloop()
     elif (escolha == "Terminal"):
         interfaceTerminal()
+
 
