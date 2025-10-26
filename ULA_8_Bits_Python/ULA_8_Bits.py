@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore', category=UserWarning, module='pygame.pkgdata')
 import pygame
 
 
-HABILITAR_AUDIO = 0
+HABILITAR_AUDIO = 1
 
 OP_AND = 0b000
 OP_OR  = 0b001
@@ -21,11 +21,6 @@ OP_ADD = 0b100
 OP_SUB = 0b101
 OP_MUL = 0b110
 OP_DIV = 0b111
-
-
-
-
-
 
 def inputLoop(msg, tipo=str, min_v=None, max_v=None):
     while (1):
@@ -190,6 +185,9 @@ class AluGUI:
         }
         self.x = 0
         self.y = 0
+        self.z = 0
+        self.opcode = 0
+        self.etapaAutomatica = 0
 
         style = ttk.Style()
         default_font_size = 10 
@@ -250,18 +248,18 @@ class AluGUI:
         self.x_entry = ttk.Entry(self.input_frame, width=larguraEntrada)
         self.x_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
         self.x_entry.insert(0, f"{0:08b}")
-        self.x = tk.StringVar(value="(Decimal: 0)")
+        self.xString = tk.StringVar(value="(Decimal: 0)")
         self.x_entry.bind("<FocusOut>", self.atualizarStringsDasCaixas)
-        ttk.Label(self.input_frame, textvariable=self.x).grid(row=0, column=2, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(self.input_frame, textvariable=self.xString).grid(row=0, column=2, padx=5, pady=5, sticky=tk.W)
 
 
         ttk.Label(self.input_frame, text="Entrada B (8 Bits):").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
         self.y_entry = ttk.Entry(self.input_frame, width=larguraEntrada)
         self.y_entry.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
         self.y_entry.insert(0, f"{0:08b}")
-        self.y = tk.StringVar(value="(Decimal: 0)")
+        self.yString = tk.StringVar(value="(Decimal: 0)")
         self.y_entry.bind("<FocusOut>", self.atualizarStringsDasCaixas)
-        ttk.Label(self.input_frame, textvariable=self.y).grid(row=1, column=2, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(self.input_frame, textvariable=self.yString).grid(row=1, column=2, padx=5, pady=5, sticky=tk.W)
 
         ttk.Label(self.input_frame, text="Operação:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
         self.op_combo = ttk.Combobox(self.input_frame, values=list(self.op_map.keys()), state="readonly", width=15)
@@ -295,7 +293,7 @@ class AluGUI:
         ttk.Label(output_frame, textvariable=self.z_bin_var, style="Result.TLabel").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
         ttk.Label(output_frame, textvariable=self.flag_var, style="Result.TLabel").grid(row=4, column=0, padx=5, pady=10, sticky=tk.W)
 
-        self.tocarAudio("insiraEntrada.mp3")
+        # self.tocarAudio("insiraEntrada.mp3")
     
 
     def atualizarBotoesEntrada(self):
@@ -303,7 +301,6 @@ class AluGUI:
         Habilita ou desabilita botoões da entrada baseado no modo 
         """
         modoAtual = self.modo.get()
-        print(self.modo)
     
         if modoAtual == self.MODO_AUTOMATICO:
             estadoNovo = "disabled"
@@ -323,7 +320,7 @@ class AluGUI:
         return
 
     def receberEAtualizarEntradas(self):
-        """Valida, formata e atualiza os campos de entrada A e B."""
+        """Valida, formata e atualiza os campos de entrada A, B e Operação."""
         
         try:
             x_str = self.x_entry.get()
@@ -333,11 +330,8 @@ class AluGUI:
         except ValueError:
             x = 0 # Reseta se for inválido (ex: "110a11")
         
-        # Formata de volta para 8 bits e atualiza a caixa de entrada
-        self.x_entry.delete(0, tk.END)
-        self.x_entry.insert(0, f"{x:08b}")
-        self.x.set(f"(Decimal: {x})") # Atualiza o label decimal
-
+        self.x = x
+        
         # --- Processar B ---
         try:
             y_str = self.y_entry.get()
@@ -347,15 +341,28 @@ class AluGUI:
         except ValueError:
             y = 0
         
-        self.y_entry.delete(0, tk.END)
-        self.y_entry.insert(0, f"{y:08b}")
-        self.y.set(f"(Decimal: {y})")
+        self.y = y
 
         op_nome = self.op_combo.get()
-        opcode = self.op_map[op_nome]
-        self.comboStr.set(f"({opcode:03b})")
+        self.opcode = self.op_map[op_nome]
 
-        return (x, y, opcode)
+        self.setarEntradas()
+
+        return (self.x, self.y, self.opcode)
+
+    def setarEntradas(self):
+        self.x_entry.delete(0, tk.END)
+        self.x_entry.insert(0, f"{self.x:08b}")
+        self.xString.set(f"(Decimal: {self.x})")
+
+        self.y_entry.delete(0, tk.END)
+        self.y_entry.insert(0, f"{self.y:08b}")
+        self.yString.set(f"(Decimal: {self.y})")
+
+        self.comboStr.set(f"({self.opcode:03b})")
+
+        return
+
 
     def tocarAudio(self, path):
         if HABILITAR_AUDIO == 0:
@@ -388,36 +395,81 @@ class AluGUI:
             self.tocandoAudio = False
             self.processarFilaDeAudio()
 
+    def atualizarSaida(self, op1, op2, opcode):
+        op_str = op2str(op1, op2, opcode)
+        self.z_op_var.set(f"R = {op_str}")
+        self.z_dec_var.set(f"Decimal: {self.z}")
+        self.z_hex_var.set(f"Hex:     0x{self.z:02X}")
+        self.z_bin_var.set(f"Binário: {self.z:08b}")
+        
+        # 4. Atualizar a Flag
+        F = self.flag
+        flag_nome = "Flag"
+        if opcode == OP_ADD and F == 1: flag_nome = "Carry"
+        elif opcode == OP_SUB and F == 1: flag_nome = "Borrow"
+        elif opcode == OP_MUL and F == 1: flag_nome = "Overflow"
+        elif opcode == OP_DIV and F == 1: flag_nome = "Div por Zero"
+
+        self.flag_var.set(f"Flag ({flag_nome}): {self.flag}")
 
     def calcular(self):
         """Pega as entradas, executa a ULA e atualiza as saídas."""
 
-        try:
-            x, y, opcode = self.receberEAtualizarEntradas()
+        modo = self.modo.get()
+        if modo == self.MODO_MANUAL:
+            try:
+                # Ler Entrada
+                self.x, self.y, self.opcode = self.receberEAtualizarEntradas()
 
-            # 2. Executar a ULA
-            Z, F = self.alu.execute(x, y, opcode)
+                # Executar ALU 
+                self.z, self.flag = self.alu.execute(self.x, self.y, self.opcode)
 
-            # 3. Atualizar as Saídas
-            self.z_op_var.set(f"R = {op2str('A', 'B', opcode)}")
-            self.z_dec_var.set(f"Decimal: {Z}")
-            self.z_hex_var.set(f"Hex:     0x{Z:02X}")
-            self.z_bin_var.set(f"Binário: {Z:08b}")
-            
-            # 4. Atualizar a Flag
-            flag_nome = "Flag"
-            if opcode == OP_ADD and F == 1: flag_nome = "Carry"
-            elif opcode == OP_SUB and F == 1: flag_nome = "Borrow"
-            elif opcode == OP_MUL and F == 1: flag_nome = "Overflow"
-            elif opcode == OP_DIV and F == 1: flag_nome = "Div por Zero"
-            
-            self.flag_var.set(f"Flag ({flag_nome}): {F}")
+                # Mostrar Saida 
+                self.atualizarSaida('A', 'B', self.opcode)
 
-        except ValueError:
-            messagebox.showerror("Erro de Entrada", "As entradas A e B devem ser números inteiros.")
-        except Exception as e:
-            messagebox.showerror("Erro Inesperado", f"Ocorreu um erro: {e}")
+            except ValueError:
+                messagebox.showerror("Erro de Entrada", "As entradas A e B devem ser números inteiros.")
+            except Exception as e:
+                print(e)
+                messagebox.showerror("Erro Inesperado", f"Ocorreu um erro: {e}")
 
+        elif modo == self.MODO_AUTOMATICO:
+            etapa = self.etapaAutomatica
+            self.x = 0b00000001
+            self.y = 0b00000010
+            if etapa == 0:
+                self.z, self.flag = self.alu.execute(self.x, self.y, OP_ADD)
+                self.atualizarSaida('A', 'B', OP_ADD)
+            elif etapa == 1:
+                self.z, self.flag = self.alu.execute(self.z, self.z, OP_MUL)
+                self.atualizarSaida('R', 'R', OP_MUL)
+            elif etapa == 2:
+                self.z, self.flag = self.alu.execute(self.z, self.y, OP_SUB)
+                self.atualizarSaida('R', 'B', OP_SUB)
+            elif etapa == 3:
+                self.z, self.flag = self.alu.execute(self.z, self.x, OP_SUB)
+                self.atualizarSaida('R', 'A', OP_SUB)
+            elif etapa == 4:
+                self.z, self.flag = self.alu.execute(self.z, self.y, OP_DIV)
+                self.atualizarSaida('R', 'B', OP_DIV)
+            elif etapa == 5:
+                self.z, self.flag = self.alu.execute(self.z, self.x, OP_AND)
+                self.atualizarSaida('R', 'A', OP_AND)
+            elif etapa == 6:
+                self.z, self.flag = self.alu.execute(self.z, self.z, OP_NOT)
+                self.atualizarSaida('R', 'R', OP_NOT)
+            elif etapa == 7:
+                self.z, self.flag = self.alu.execute(self.z, self.x, OP_OR)
+                self.atualizarSaida('R', 'A', OP_OR)
+            elif etapa == 8:
+                self.z, self.flag = self.alu.execute(self.z, self.x, OP_ADD)
+                self.atualizarSaida('R', 'A', OP_ADD)
+            elif etapa == 9:
+                 self.z, self.flag = self.alu.execute(self.z, self.z, OP_NOT)
+                 self.atualizarSaida('R', 'R', OP_NOT)
+                 self.etapaAutomatica = -1
+
+            self.etapaAutomatica += 1
 
 
 
