@@ -11,6 +11,9 @@ warnings.filterwarnings('ignore', category=UserWarning, module='pygame.pkgdata')
 import pygame
 
 
+HABILITAR_AUDIO = 0
+
+
 def inputLoop(msg, tipo=str, min_v=None, max_v=None):
     while (1):
         entrada = input(msg).strip()
@@ -131,12 +134,12 @@ class AluGUI:
 
         self.root = root
         self.root.title("Simulador ULA 8-bits")
-        #icon = tk.PhotoImage(file='ULA.png')
-        #root.iconphoto(True, icon)
         self.root.minsize(512, 270)
         self.root.resizable(True, True)
         self.root.rowconfigure(0, weight=1)
         self.root.columnconfigure(0, weight=1)
+        self.root.attributes('-topmost', True)
+
 
 
         # Instancia a ULA
@@ -293,6 +296,9 @@ class AluGUI:
         return (x, y, opcode)
 
     def tocarAudio(self, path):
+        if HABILITAR_AUDIO == 0:
+            return
+
         self.audioFila.append(path)
         
         if not self.tocandoAudio:
