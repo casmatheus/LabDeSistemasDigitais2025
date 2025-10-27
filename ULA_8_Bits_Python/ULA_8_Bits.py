@@ -436,8 +436,11 @@ class AluGUI:
     
         if modoAtual == self.MODO_AUTOMATICO:
             estadoNovo = "disabled"
+            self.tocarAudio("ModoAuto.mp3")
+
         else:
             estadoNovo = "normal"
+            self.tocarAudio("ModoManual.mp3")
     
         # Loop que passa por todos os botões da entrada
         for widget in self.input_frame.winfo_children():
