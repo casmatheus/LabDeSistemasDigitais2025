@@ -122,8 +122,6 @@ class Arduino:
             self.led1 = self.board.get_pin(f"d:{self.pinoLedZ1}:o")
             self.led0 = self.board.get_pin(f"d:{self.pinoLedZ0}:o")
 
-            time.sleep(0.1)
-
         except pyfirmata.serial.SerialException as e:
             print(f"Erro, não foi possível se conectar ao port {self.PORT}. {e}")
             self.erro = 1
@@ -189,7 +187,6 @@ class Arduino:
         Com espera de 1 segundo, sem bloquear a interface gráfica.
         """
         if self.desabilitar == 1:
-            print("Não é possível mostrar LED: Arduino desabilitado.")
             return
 
         try:
@@ -200,7 +197,7 @@ class Arduino:
 
             self.ligar4LEDs(parteBaixa)
 
-            self.root.after(1000, self.ligar4LEDs, parte_alta_msb)
+            self.root.after(1000, self.ligar4LEDs, parteAlta)
 
         except Exception as e:
             print(f"Erro ao mostrar resultado nos LEDs: {e}")
