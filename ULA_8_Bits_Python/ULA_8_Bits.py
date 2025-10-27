@@ -327,6 +327,7 @@ class AluGUI:
         self.root.option_add('*TCombobox*Listbox.font', default_font)
 
 
+
         style.configure(".", font=default_font) # '.' aplica a todos
         style.configure("TButton", font=default_font)
         style.configure("TLabel", font=default_font)
@@ -337,6 +338,26 @@ class AluGUI:
         style.configure("TLabelframe.Label", font=(default_font[0], default_font_size + 1, "bold"))
 
         style.configure("Result.TLabel", font=("Courier", default_font_size + 2))
+
+        font_titulo = style.lookup("TLabelframe.Label", "font")
+
+        # Cor de destaque azul claro
+        COR_DESTAQUE_FUNDO = "#E0E8FF" 
+        # Cor de destaque azul escuro (para o texto)
+        COR_DESTAQUE_TEXTO = "#0000CC" 
+
+        # 2. Configura o novo estilo de destaque
+        style.configure(
+            "Highlight.TLabelframe",
+            labelanchor='n',
+            background=COR_DESTAQUE_FUNDO  # <-- Muda o fundo do frame
+        )
+        style.configure(
+            "Highlight.TLabelframe.Label",
+            font=font_titulo,
+            foreground=COR_DESTAQUE_TEXTO, # <-- Muda o texto
+            background=COR_DESTAQUE_FUNDO  # <-- Muda o fundo do label (para combinar)
+        )
 
         # --- Cria o frame principal ---
         main_frame = ttk.Frame(root, padding="10")
@@ -409,8 +430,8 @@ class AluGUI:
 
         # --- Seção de Saídas ---
         row += 1
-        output_frame = ttk.LabelFrame(main_frame, text="Saídas", padding="10", labelanchor='n')
-        output_frame.grid(row=row, column=0, padx=5, pady=5)
+        self.output_frame = ttk.LabelFrame(main_frame, text="Saídas", padding="10", labelanchor='n')
+        self.output_frame.grid(row=row, column=0, padx=5, pady=5)
 
         # Variáveis para atualizar os labels de resultado
         self.z_op_var  = tk.StringVar(value="Operação: -")
@@ -419,14 +440,31 @@ class AluGUI:
         self.z_bin_var = tk.StringVar(value="Binário: -")
         self.flag_var  = tk.StringVar(value="Flag: -")
 
-        ttk.Label(output_frame, textvariable=self.z_op_var, style="Result.TLabel").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Label(output_frame, textvariable=self.z_dec_var, style="Result.TLabel").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Label(output_frame, textvariable=self.z_hex_var, style="Result.TLabel").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Label(output_frame, textvariable=self.z_bin_var, style="Result.TLabel").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Label(output_frame, textvariable=self.flag_var, style="Result.TLabel").grid(row=4, column=0, padx=5, pady=10, sticky=tk.W)
+        ttk.Label(self.output_frame, textvariable=self.z_op_var, style="Result.TLabel").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(self.output_frame, textvariable=self.z_dec_var, style="Result.TLabel").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(self.output_frame, textvariable=self.z_hex_var, style="Result.TLabel").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(self.output_frame, textvariable=self.z_bin_var, style="Result.TLabel").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(self.output_frame, textvariable=self.flag_var, style="Result.TLabel").grid(row=4, column=0, padx=5, pady=10, sticky=tk.W)
 
         # self.tocarAudio("insiraEntrada.mp3")
     
+    def highlightSaida(self):
+        """ Aplica o estilo de destaque ao frame de saída. """
+        try:
+            self.output_frame.config(style="Highlight.TLabelframe")
+            
+            self.root.after(1500, self.unhighlightSaida)
+            
+        except tk.TclError:
+            pass
+
+    def unhighlightSaida(self):
+        """ Restaura o estilo padrão do frame de saída. """
+        try:
+            self.output_frame.config(style="TLabelframe")
+        except tk.TclError:
+            pass
+
 
     def atualizarBotoesEntrada(self):
         """
@@ -605,6 +643,7 @@ class AluGUI:
                  self.atualizarSaida('R', 'R', OP_NOT)
                  self.etapaAutomatica = -1
                  self.tocarAudio("ResultadoFinal.mp3")
+                 self.highlightSaida()
 
             self.etapaAutomatica += 1
 
