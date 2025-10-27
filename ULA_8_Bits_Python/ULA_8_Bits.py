@@ -474,10 +474,22 @@ class AluGUI:
     
         if modoAtual == self.MODO_AUTOMATICO:
             estadoNovo = "disabled"
+
+            self.x = 0b00000001
+            self.y = 0b00000010
+            self.setarEntradas()
+
             self.tocarAudio("ModoAuto.mp3")
 
         else:
             estadoNovo = "normal"
+
+            self.x = 0
+            self.y = 0
+            self.op_combo.current(0) 
+            self.opcode = self.op_map[self.op_combo.get()]
+            self.setarEntradas()
+
             self.tocarAudio("ModoManual.mp3")
     
         # Loop que passa por todos os botões da entrada
@@ -508,7 +520,7 @@ class AluGUI:
         # --- Processar B ---
         try:
             y_str = self.y_entry.get()
-            y = int(y_str, 2) # Tenta converter de binário
+            y = int(y_str, 2)
             if not (0 <= y <= 255):
                 y = 0
         except ValueError:
