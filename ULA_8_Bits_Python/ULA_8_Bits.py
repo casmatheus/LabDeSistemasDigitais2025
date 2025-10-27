@@ -604,6 +604,7 @@ class AluGUI:
                  self.z, self.flag = self.alu.execute(self.z, self.z, OP_NOT)
                  self.atualizarSaida('R', 'R', OP_NOT)
                  self.etapaAutomatica = -1
+                 self.tocarAudio("ResultadoFinal.mp3")
 
             self.etapaAutomatica += 1
 
