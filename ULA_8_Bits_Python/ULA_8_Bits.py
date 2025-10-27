@@ -163,6 +163,51 @@ class Arduino:
             self.erro = 1
             self.desabilitar = 1
 
+
+    def ligar4LEDs(self, valor):
+            """
+            Envia um valor de 4 bits para os 4 LEDs de dados.
+            """
+            if self.desabilitar == 1:
+                return
+                
+            try:
+                self.led0.write(valor & 1)
+                self.led1.write((valor >> 1) & 1)
+                self.led2.write((valor >> 2) & 1)
+                self.led3.write((valor >> 3) & 1)
+                
+            except Exception as e:
+                print(f"Erro ao acender LEDs: {e}")
+                self.erro = 1
+                self.desabilitar = 1
+
+
+    def mostrarResultadoEmLEDsGUI(self, saida, flag):
+        """
+        Mostra um resultado de 8 bits em 2 partes nos LEDs,
+        Com espera de 1 segundo, sem bloquear a interface gráfica.
+        """
+        if self.desabilitar == 1:
+            print("Não é possível mostrar LED: Arduino desabilitado.")
+            return
+
+        try:
+            self.ledCout.write(flag)
+
+            parteBaixa = saida & 0x0F
+            parteAlta = (saida >> 4) & 0x0F
+
+            self.ligar4LEDs(parteBaixa)
+
+            self.root.after(1000, self.ligar4LEDs, parte_alta_msb)
+
+        except Exception as e:
+            print(f"Erro ao mostrar resultado nos LEDs: {e}")
+            self.erro = 1
+            self.desabilitar = 1
+
+
 class ALU_8bit:
     """
     Operações da ULA:
@@ -492,7 +537,6 @@ class AluGUI:
         self.z_hex_var.set(f"Hex:     0x{self.z:02X}")
         self.z_bin_var.set(f"Binário: {self.z:08b}")
         
-        # 4. Atualizar a Flag
         F = self.flag
         flag_nome = "Flag"
         if opcode == OP_ADD and F == 1: flag_nome = "Carry"
@@ -501,6 +545,8 @@ class AluGUI:
         elif opcode == OP_DIV and F == 1: flag_nome = "Div por Zero"
 
         self.flag_var.set(f"Flag ({flag_nome}): {self.flag}")
+
+        self.arduino.mostrarResultadoEmLEDsGUI(self.z, self.flag)
 
     def calcular(self):
         """Pega as entradas, executa a ULA e atualiza as saídas."""
