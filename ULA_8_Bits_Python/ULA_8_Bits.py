@@ -4,8 +4,9 @@ from tkinter import messagebox
 from PIL import ImageTk, Image
 import os
 import warnings
-import pyfirmata2 as pyfirmata
+import pyfirmata
 import time
+
 
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "1"
 warnings.filterwarnings('ignore', category=UserWarning, module='pygame.pkgdata')
@@ -23,7 +24,9 @@ OP_SUB = 0b101
 OP_MUL = 0b110
 OP_DIV = 0b111
 
-def inputLoop(msg, tipo=str, min_v=None, max_v=None):
+INDENT = "\t\t\t\t\t"
+
+def inputLoop(msg, tipo=str, min_v=None, max_v=None, arduino=None):
     while (1):
         entrada = input(msg).strip()
         
@@ -43,12 +46,14 @@ def inputLoop(msg, tipo=str, min_v=None, max_v=None):
         if ((max_v is not None) and (entrada > max_v)):
             print(f"Entrada deve ser menor ou igual a {max_v}. Tente novamente.\n")
             continue
+
+        if arduino and not arduino.desabilitar:
+            arduino.esperarBotaoPressionar_Terminal()
         
         return entrada
 
-
 # Pede para o usuário escolher um item em uma lista
-def inputEscolha(msg, lista):
+def inputEscolha(msg, lista, arduino = None):
     for i, item in enumerate(lista):
         print(f"{i + 1}) {item}")
 
@@ -57,6 +62,26 @@ def inputEscolha(msg, lista):
 
     return item_escolhido 
 
+def receber_entrada_binario(nome_da_entrada, num_bits, arduino = None):
+    """ Pede e valida uma entrada binária do usuário """
+    prompt = f"{INDENT}Digite a entrada {nome_da_entrada} com {num_bits} bits: "
+    while True:
+        s = input(prompt).strip()
+        if len(s) != num_bits:
+            print(f"{INDENT}Erro: A entrada deve ter exatamente {num_bits} bits. Tente novamente.")
+            continue
+        if not all(c in '01' for c in s):
+            print(f"{INDENT}Erro: A entrada deve conter apenas '0' e '1'. Tente novamente.")
+            continue
+
+        if arduino and not arduino.desabilitar:
+            arduino.esperarBotaoPressionar_Terminal()
+        
+        # Se chegou aqui, é válido
+        valor_byte = int(s, 2)
+        print(f"{INDENT}{nome_da_entrada} = {valor_byte} | {s}")
+        print() # Espaçamento
+        return valor_byte
 
 def op2str(A, B, opcode):
     if opcode == OP_AND:
@@ -77,19 +102,281 @@ def op2str(A, B, opcode):
         return f"{A} / {B}"
     else:
         return ""
+    
+def pegarNomeFlag(opcode, flag):
+    """ Retorna o nome correto da flag (igual à GUI) """
+    if flag == 0:
+        return "Flag"  # Nome padrão
+    if opcode == OP_ADD:
+        return "Carry"
+    if opcode == OP_SUB:
+        return "Borrow"
+    if opcode == OP_MUL:
+        return "Overflow"
+    if opcode == OP_DIV:
+        return "Div por Zero"
+    return "Flag"  # Nome padrão para flag=1 sem caso especial
+
+def imprimir_na_caixa(op_str, resultado, flag, operacao, is_final=False):
+    """
+    Imprime a caixa de resultado formatada, estilo GUI.
+    (Corrigido alinhamento do gradiente e largura do título)
+    """
+    # --- 1. PREPARAÇÃO DOS DADOS (Igual à GUI) ---
+    flag_nome = pegarNomeFlag(operacao, flag)
+
+    linhas = [
+        f"Operação: {op_str}",
+        f"Decimal : {resultado}",
+        f"Hex     : 0x{resultado:02X}",
+        f"Binário : {resultado:08b}",
+        f"Flag ({flag_nome}): {flag}"
+    ]
+
+    titulo_final = ""
+    if is_final:
+        titulo_final = "R E S U L T A D O  F I N A L"
+
+    # Encontrar a largura máxima necessária, considerando os dados E o título
+    largura_caixa = 0
+    # Primeiro, checa as linhas de dados
+    for linha in linhas:
+        if len(linha) > largura_caixa:
+            largura_caixa = len(linha)
+    
+    # AGORA, checa também a linha do título
+    if len(titulo_final) > largura_caixa:
+        largura_caixa = len(titulo_final)
+            
+    # Adicionar um pequeno padding
+    largura_caixa += 2 
+
+    # --- 2. DESENHO DA CAIXA ---
+    
+    # Função auxiliar para formatar e imprimir uma linha
+    def print_linha(texto, char_borda="║"):
+        # Adiciona padding de espaços à direita
+        padding = " " * (largura_caixa - len(texto)) 
+        print(f"{INDENT}{char_borda} {texto}{padding} {char_borda}")
+
+    char_topo_esq, char_topo, char_topo_dir = "╔", "═", "╗"
+    char_fundo_esq, char_fundo, char_fundo_dir = "╚", "═", "╝"
+    char_borda = "║"
+    
+    # Largura total da caixa, incluindo bordas
+    largura_total_caixa = largura_caixa + 4
+
+    if is_final:
+        # --- CAIXA FINAL (com mais destaque) ---
+        
+        # Remove os espaços extras e usa a largura total calculada
+        print(f"\n{INDENT}{'░' * largura_total_caixa}")
+        
+        # Centraliza o título
+        padding_total = largura_caixa - len(titulo_final)
+        padding_esq = padding_total // 2
+        padding_dir = padding_total - padding_esq
+        
+        print(f"{INDENT}{char_topo_esq}{char_topo * (largura_caixa + 2)}{char_topo_dir}")
+        print(f"{INDENT}{char_borda} {' ' * padding_esq}{titulo_final}{' ' * padding_dir} {char_borda}")
+        
+        char_meio_esq, char_meio, char_meio_dir = "╠", "═", "╣"
+        print(f"{INDENT}{char_meio_esq}{char_meio * (largura_caixa + 2)}{char_meio_dir}")
+        
+    else:
+        # --- CAIXA SIMPLES ---
+        print(f"\n{INDENT}{char_topo_esq}{char_topo * (largura_caixa + 2)}{char_topo_dir}")
+
+
+    # Imprime todas as linhas de dados (Operação, Dec, Hex, Bin, Flag)
+    for linha in linhas:
+        print_linha(linha, char_borda)
+
+    # Imprime fundo da caixa
+    print(f"{INDENT}{char_fundo_esq}{char_fundo * (largura_caixa + 2)}{char_fundo_dir}")
+    
+    if is_final:
+        print(f"{INDENT}{'▒' * largura_total_caixa}")
+        print()
+
+def print_banner_setup():
+    """ Imprime o banner inicial (copiado do seu C++) """
+    print()
+    print(INDENT + "╔═══════════════════════════════════════════════════╗")
+    print(INDENT + "║   .------------------------------------------.    ║")
+    print(INDENT + "║   |   ░▒▓ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ▓▒░  |   ║")
+    print(INDENT + "║   |   ░▒▓ | ULA 8BITS - TERMINAL PYTHON |▓▒░  |   ║")
+    print(INDENT + "║   |   ░▒▓ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ▓▒░  |   ║")
+    print(INDENT + "║   |   ░▒▓ >>> PROCESSADOR DE 8 BITS <<<  ▓▒░  |   ║")
+    print(INDENT + "║   '------------------------------------------'    ║")
+    print(INDENT + "╚═══════════════════════════════════════════════════╝")
+
+def print_menu_modo():
+    """ Imprime a caixa de seleção de modo (copiado do seu C++) """
+    print("\n")
+    print(INDENT + "╔═════ ░▒▓  SELECIONE O MODO   ▓▒░ ═════╗")
+    print(INDENT + "║                                       ║")
+    print(INDENT + "║         (1) Modo Manual               ║")
+    print(INDENT + "║         (2) Modo Automatico           ║")
+    print(INDENT + "║                                       ║")
+    print(INDENT + "╚═══════════════════════════════════════╝")
+    print("\n")
+
+def print_painel_operacoes():
+    """ Imprime o painel de operações (copiado do seu C++) """
+    print(INDENT + "╔═══════════════════ PAINEL DE OPERAÇÕES DA ULA ═══════════════════╗")
+    print(INDENT + "║  ╔═══════════╗  ╔══════════╗  ╔════════════╗  ╔═══════════════╗  ║")
+    print(INDENT + "║  ║ 000: AND  ║  ║ 010: NOT ║  ║ 100: SOMA  ║  ║ 110: MULTIPL. ║  ║")
+    print(INDENT + "║  ╚═══════════╝  ╚══════════╝  ╚════════════╝  ╚═══════════════╝  ║")
+    print(INDENT + "║  ╔═══════════╗  ╔══════════╗  ╔════════════╗  ╔═══════════════╗  ║")
+    print(INDENT + "║  ║ 001: OR   ║  ║ 011: XOR ║  ║ 101: SUB.  ║  ║ 111: DIVISAO  ║  ║")
+    print(INDENT + "║  ╚═══════════╝  ╚══════════╝  ╚════════════╝  ╚═══════════════╝  ║")
+    print(INDENT + "╚══════════════════════════════════════════════════════════════════╝")
+    print()
+
+def modo_manual(alu, arduino):
+    """ Executa a ULA no modo manual """
+    
+    # 1. Receber Entradas (8 bits)
+    entrada_x = receber_entrada_binario('X', 8)
+    entrada_y = receber_entrada_binario('Y', 8)
+
+    # 2. Imprimir Painel
+    print_painel_operacoes()
+
+    # 3. Receber Operação (3 bits)
+    operacao_str_prompt = f"{INDENT}Escolha a operacao (3 bits): "
+    while True:
+        s = input(operacao_str_prompt).strip()
+        if len(s) != 3:
+            print(f"{INDENT}Erro: A operação deve ter exatamente 3 bits. Tente novamente.")
+            continue
+        if not all(c in '01' for c in s):
+            print(f"{INDENT}Erro: A operação deve conter apenas '0' e '1'. Tente novamente.")
+            continue
+
+        if arduino and not arduino.desabilitar:
+            arduino.esperarBotaoPressionar_Terminal()
+
+        operacao = int(s, 2)
+        break # Sai do loop se for válido
+    
+    # 4. Executar ULA
+    saida_z, flag = alu.execute(entrada_x, entrada_y, operacao)
+
+    # 5. Mapear opcode para nome (para o print)
+    op_map = {
+        0: "And", 1: "Or", 2: "Not", 3: "Xor",
+        4: "Soma", 5: "Sub", 6: "Mul", 7: "Div"
+    }
+    op_nome = op_map.get(operacao, "Invalida")
+
+    # 6. Imprimir caixa de operação
+    print(f"\n{INDENT}╔═══════════════════════════════════════╗")
+    print(f"{INDENT}║           O P E R A Ç Ã O             ║")
+    print(f"{INDENT}╚═══════════════════════════════════════╝")
+    print(f"{INDENT}{s} | {op_nome}")
+
+    # 7. Criar string da operação (ex: "X + Y")
+    op_str = ""
+    if operacao == OP_NOT:
+        op_str = f"~Y (~{entrada_y})"
+    else:
+        op_simbolos = {0: '&', 1: '|', 3: '^', 4: '+', 5: '-', 6: '*', 7: '/'}
+        op_s = op_simbolos.get(operacao, '?')
+        op_str = f"X {op_s} Y ({entrada_x} {op_s} {entrada_y})"
+
+    # 8. Imprimir caixa de resultado final
+    imprimir_na_caixa(op_str, saida_z, flag, operacao, is_final=True)
+
+    if arduino and not arduino.desabilitar:
+        arduino.mostrarResultadoEmLEDs_Terminal(saida_z, flag)
+
+def modo_automatico(alu, arduino):
+    """ 
+    Executa a sequência de operações do modo automático 
+    """
+    
+   # Receber Entradas Iniciais
+    entrada_a = receber_entrada_binario('A', 8)
+    entrada_b = receber_entrada_binario('B', 8)
+    
+    flag = 0
+    resultado_r = 0
+
+    # Sequência de Passos
+    
+    # R = A + B
+    resultado_r, flag = alu.execute(entrada_a, entrada_b, OP_ADD)
+    imprimir_na_caixa("A + B", resultado_r, flag, OP_ADD, is_final=False)
+    arduino.esperarBotaoPressionar_Terminal()
+    
+    # R = R * R
+    resultado_r_anterior = resultado_r
+    resultado_r, flag = alu.execute(resultado_r, resultado_r, OP_MUL)
+    imprimir_na_caixa(f"R * R ({resultado_r_anterior} * {resultado_r_anterior})", resultado_r, flag, OP_MUL, is_final=False)
+    arduino.esperarBotaoPressionar_Terminal()
+
+    # R = R - B
+    resultado_r_anterior = resultado_r
+    resultado_r, flag = alu.execute(resultado_r, entrada_b, OP_SUB)
+    imprimir_na_caixa(f"R - B ({resultado_r_anterior} - {entrada_b})", resultado_r, flag, OP_SUB, is_final=False)
+    arduino.esperarBotaoPressionar_Terminal()
+
+    # R = R - A
+    resultado_r_anterior = resultado_r
+    resultado_r, flag = alu.execute(resultado_r, entrada_a, OP_SUB)
+    imprimir_na_caixa(f"R - A ({resultado_r_anterior} - {entrada_a})", resultado_r, flag, OP_SUB, is_final=False)
+    arduino.esperarBotaoPressionar_Terminal()
+
+    # R = R / B
+    resultado_r_anterior = resultado_r
+    resultado_r, flag = alu.execute(resultado_r, entrada_b, OP_DIV)
+    imprimir_na_caixa(f"R / B ({resultado_r_anterior} / {entrada_b})", resultado_r, flag, OP_DIV, is_final=False)
+    arduino.esperarBotaoPressionar_Terminal()
+
+    # R = R & A
+    resultado_r_anterior = resultado_r
+    resultado_r, flag = alu.execute(resultado_r, entrada_a, OP_AND)
+    imprimir_na_caixa(f"R & A ({resultado_r_anterior} & {entrada_a})", resultado_r, flag, OP_AND, is_final=False)
+    arduino.esperarBotaoPressionar_Terminal()
+
+    # R = ~R
+    resultado_r_anterior = resultado_r
+    resultado_r, flag = alu.execute(0, resultado_r, OP_NOT) # X é irrelevante para NOT
+    imprimir_na_caixa(f"~R (~{resultado_r_anterior})", resultado_r, flag, OP_NOT, is_final=False)
+    arduino.esperarBotaoPressionar_Terminal()
+
+    # R = R | A
+    resultado_r_anterior = resultado_r
+    resultado_r, flag = alu.execute(resultado_r, entrada_a, OP_OR)
+    imprimir_na_caixa(f"R | A ({resultado_r_anterior} | {entrada_a})", resultado_r, flag, OP_OR, is_final=False)
+    arduino.esperarBotaoPressionar_Terminal()
+
+    # R = R + A
+    resultado_r_anterior = resultado_r
+    resultado_r, flag = alu.execute(resultado_r, entrada_a, OP_ADD)
+    imprimir_na_caixa(f"R + A ({resultado_r_anterior} + {entrada_a})", resultado_r, flag, OP_ADD, is_final=False)
+    arduino.esperarBotaoPressionar_Terminal()
+
+    # R = ~R (Final)
+    resultado_r_anterior = resultado_r
+    resultado_r, flag = alu.execute(0, resultado_r, OP_NOT)
+    imprimir_na_caixa(f"~R (~{resultado_r_anterior})", resultado_r, flag, OP_NOT, is_final=True)
+    arduino.esperarBotaoPressionar_Terminal()
 
 class Arduino:
     """
     Classe que define a comunicação com a Arduino
     """
     
-    PORT = "COM3"
-    pinoBotao = 8
-    pinoLedCout = 13
-    pinoLedZ3 = 9
-    pinoLedZ2 = 10
-    pinoLedZ1 = 11
-    pinoLedZ0 = 12
+    PORT = "COM9"
+    pinoBotao = 10
+    #pinoLedCout = 13
+    pinoLedZ3 = 3
+    pinoLedZ2 = 4
+    pinoLedZ1 = 5
+    pinoLedZ0 = 6
     
 
     def __init__(self, root = None):
@@ -116,7 +403,7 @@ class Arduino:
             self.botao.enable_reporting()
             
             # Digital : Numero do Pino : Output
-            self.ledCout = self.board.get_pin(f"d:{self.pinoLedCout}:o")
+            #self.ledCout = self.board.get_pin(f"d:{self.pinoLedCout}:o")
             self.led3 = self.board.get_pin(f"d:{self.pinoLedZ3}:o")
             self.led2 = self.board.get_pin(f"d:{self.pinoLedZ2}:o")
             self.led1 = self.board.get_pin(f"d:{self.pinoLedZ1}:o")
@@ -165,6 +452,7 @@ class Arduino:
     def ligar4LEDs(self, valor):
             """
             Envia um valor de 4 bits para os 4 LEDs de dados.
+            (Funciona na GUI e no Terminal)
             """
             if self.desabilitar == 1:
                 return
@@ -179,7 +467,40 @@ class Arduino:
                 print(f"Erro ao acender LEDs: {e}")
                 self.erro = 1
                 self.desabilitar = 1
+        
+    def esperarBotaoPressionar_Terminal(self):
+        """
+        Espera (de forma BLOQUEANTE) o botão ser pressionado.
+        Usado para o Terminal.
+        """
+        if self.desabilitar:
+            return
 
+        print(f"{INDENT}Aperte o Botão para carregar a entrada!")
+        estado_anterior = True # Começa solto
+        
+        # Espera o botão estar solto (caso já esteja pressionado)
+        while True:
+            estado_atual = self.botao.read()
+            if estado_atual is True:
+                break
+            if estado_atual is None: # AINDA INICIALIZANDO
+                print(f"\r{INDENT}Aguardando conexão com botão...", end="")
+            time.sleep(0.05)
+        
+        print(f"\r{INDENT}Aperte o Botão para carregar a entrada! (Pronto) ")
+        
+        # Espera o botão ser pressionado
+        while True:
+            estado_atual = self.botao.read()
+            # Detecta a borda de descida (solto -> pressionado)
+            if estado_anterior is True and estado_atual is False:
+                print(f"\n{INDENT}...Botão Pressionado!...")
+                time.sleep(0.1) # Debounce
+                return
+            
+            estado_anterior = estado_atual
+            time.sleep(0.05) # Polling interval
 
     def mostrarResultadoEmLEDsGUI(self, saida, flag):
         """
@@ -190,7 +511,7 @@ class Arduino:
             return
 
         try:
-            self.ledCout.write(flag)
+            #self.ledCout.write(flag)
 
             parteBaixa = saida & 0x0F
             parteAlta = (saida >> 4) & 0x0F
@@ -203,7 +524,33 @@ class Arduino:
             print(f"Erro ao mostrar resultado nos LEDs: {e}")
             self.erro = 1
             self.desabilitar = 1
+        
+    def mostrarResultadoEmLEDs_Terminal(self, saida, flag):
+        """
+        Mostra um resultado de 8 bits em 2 partes nos LEDs,
+        Com espera de 1 segundo, BLOQUEANDO a execução.
+        Usado para o Terminal.
+        """
+        if self.desabilitar == 1:
+            return
 
+        try:
+            #self.ledCout.write(flag)
+
+            parteBaixa = saida & 0x0F
+            parteAlta = (saida >> 4) & 0x0F
+
+            self.ligar4LEDs(parteBaixa)
+
+            # Usa 'time.sleep' para ser BLOQUEANTE
+            time.sleep(1.0) 
+            
+            self.ligar4LEDs(parteAlta)
+
+        except Exception as e:
+            print(f"Erro ao mostrar resultado nos LEDs: {e}")
+            self.erro = 1
+            self.desabilitar = 1
 
 class ALU_8bit:
     """
@@ -660,26 +1007,64 @@ class AluGUI:
             self.etapaAutomatica += 1
 
 
-def interfaceTerminal():
+def interfaceTerminal(alu,arduino):
     with open("UFRJascii.txt", "r", encoding="utf-8") as f:
         banner = f.read()
         print(banner)
+    """ Roda a ULA inteira no modo terminal """
+    
+    # Imprime o Banner
+    print_banner_setup()
+
+    # Loop Principal (como o loop() do Arduino)
+    while True:
+        print_menu_modo()
+        
+        try:
+            # Passa o 'arduino' para a função de escolha
+            modo = inputLoop(f"{INDENT}Digite sua Opção: ", tipo=int, min_v=1, max_v=2, arduino=arduino)
+        except (KeyboardInterrupt, EOFError):
+            print(f"\n{INDENT}Saindo...")
+            break
+
+        if modo == 1: # MANUAL
+            modo_manual(alu, arduino) # Passa 'alu' e 'arduino'
+        elif modo == 2: # AUTOMATICO
+            modo_automatico(alu, arduino) # Passa 'alu' e 'arduino'
+        
+        print("\n" + INDENT + "--- Operação Concluída ---")
+        input(INDENT + "Pressione Enter para voltar ao menu principal...")
+        print("\n" * 5) # Limpa a tela
+        
 
 if __name__ == "__main__":
 
     print("")
+    
+    #Cria os objetos centrais UMA VEZ 
+    alu_principal = ALU_8bit()
+    arduino_principal = Arduino()
+    
     escolha = inputEscolha("Escolha o tipo de Interface: ",
-                            ["Gráfica", "Terminal"])
-
+                               ["Gráfica", "Terminal"],
+                               arduino=arduino_principal) # Passa o arduino
+                               
     if (escolha == "Gráfica"):
+        # Desliga a conexão do Arduino pois a GUI vai criar sua própria conexão 
+        if not arduino_principal.desabilitar:
+            print(f"{INDENT}Desligando conexão de terminal do Arduino...")
+            arduino_principal.board.exit()
+    
         # Inicia o modulo de audio
         pygame.mixer.init()
 
         # Inicia a aplicação gráfica
+        print(f"{INDENT}Iniciando Interface Gráfica...")
         root = tk.Tk()
-        app = AluGUI(root)
+        app = AluGUI(root) # AluGUI cria sua própria instância do Arduino
         root.mainloop()
+        
     elif (escolha == "Terminal"):
-        interfaceTerminal()
-
-
+        print(f"{INDENT}Iniciando Interface de Terminal...")
+        # =change: (Passa os objetos já criados para a função)
+        interfaceTerminal(alu_principal, arduino_principal)
