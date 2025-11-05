@@ -4,6 +4,8 @@ import serial
 import sys
 import os
 
+arduinoPort = "COM3"
+arduinoSerial = None
 
 try:
     avrdude_conf = os.path.expandvars(r"%USERPROFILE%\AppData\Local\Arduino15\packages\arduino\tools\avrdude\6.3.0-arduino17\etc\avrdude.conf")
@@ -14,12 +16,20 @@ try:
         print(avrdude_exe)
         sys.exit(1)
 
+    if arduinoSerial == None:
+       arduinoSerial = serial.Serial(arduinoPort, 115200, timeout=10)
+
+except serial.SerialException as e:
+    print(f"Erro: Não foi possível abrir a porta {arduinoPort}.")
+    print(f"Detalhes: {e}")
+    arduinoSerial = None
+
+
 except Exception as e:
     print(f"Ocorreu um erro ao configurar os Caminhos: {e}")
     sys.exit(1)
 
 
-arduinoPort = "COM3"
 avrdude_command = [
     avrdude_exe,
     f"-C{avrdude_conf}",
@@ -34,6 +44,9 @@ eeprom_dump_command = avrdude_command + ["eeprom:r:eeprom_dump.bin:r"]
 flash_dump_command = avrdude_command + ["flash:r:flash_dump.bin:r"]
 
 def run_avrdude(command):
+  if (arduinoSerial == None):
+      return
+
   try:
       result = subprocess.run(command, check=True, text=True, capture_output=True)
       
@@ -54,10 +67,13 @@ def eeprom_dump():
 def flash_dump():
     run_avrdude(flash_dump_command)
 
-def get_serial_dump(ser, comando, tamanho, file_name):
+def get_serial_dump(arduinoSerial, comando, tamanho, file_name):
+    if (arduinoSerial == None):
+        return
+
     try:
-        ser.write(comando)
-        data = ser.read(tamanho)
+        arduinoSerial.write(comando)
+        data = arduinoSerial.read(tamanho)
         
         if len(data) != tamanho:
             print(f"ERRO: Esperava {tamanho} bytes, mas recebeu {len(data)}")
@@ -70,14 +86,14 @@ def get_serial_dump(ser, comando, tamanho, file_name):
         print(f"Ocorreu um erro inesperado na comunicação serial: {e}")
 
 
-def registradores_gerais_dump(ser):
-    get_serial_dump(ser, b'G', 32, "geral_dump.bin")
+def registradores_gerais_dump():
+    get_serial_dump(arduinoSerial, b'G', 32, "geral_dump.bin")
 
-def registradores_IO_dump(ser):
-    get_serial_dump(ser, b'I', 224, "io_dump.bin")
+def registradores_IO_dump():
+    get_serial_dump(arduinoSerial, b'I', 224, "io_dump.bin")
 
-def sram_dump(ser):
-    get_serial_dump(ser, b'S', 2048, "sram_dump.bin")
+def sram_dump():
+    get_serial_dump(arduinoSerial, b'S', 2048, "sram_dump.bin")
 
 
 def full_dump():
@@ -85,19 +101,10 @@ def full_dump():
     flash_dump()
 
     try:
-        ser = serial.Serial(arduinoPort, 115200, timeout=10)
-        time.sleep(2)
-
-        registradores_gerais_dump(ser)
-        registradores_IO_dump(ser)
-        sram_dump(ser)
+        registradores_gerais_dump()
+        registradores_IO_dump()
+        sram_dump()
             
-    
-    except serial.SerialException as e:
-        print(f"--- [ERRO] ---")
-        print(f"Não foi possível abrir a porta {arduinoPort}.")
-        print("O Monitor Serial da IDE do Arduino está fechado?")
-        print(f"Detalhes: {e}")
     except Exception as e:
         print(f"Ocorreu um erro inesperado: {e}")
 

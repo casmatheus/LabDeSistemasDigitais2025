@@ -227,6 +227,57 @@ def print_painel_operacoes():
     print(INDENT + "╚══════════════════════════════════════════════════════════════════╝")
     print()
 
+def dump_binary_file(filepath, title):
+    
+    BYTES_PER_LINE = 16
+    LINE_WIDTH = 67
+
+    title_str = f" {title} "
+    print(INDENT + title_str.center(LINE_WIDTH, '='))
+
+    try:
+        with open(filepath, 'rb') as f:
+            offset = 0
+            while True:
+                # Read a chunk of 16 bytes
+                chunk = f.read(BYTES_PER_LINE)
+                if not chunk:
+                    break  # End of file
+
+                chunk_len = len(chunk)
+
+                offset_str = INDENT + f"{offset:08x}: "  # e.g., "00000000: "
+
+                hex_str_parts = []
+                for i in range(8):
+                    idx = i * 2
+                    if idx + 1 < chunk_len:
+                        hex_str_parts.append(f"{chunk[idx]:02x}{chunk[idx+1]:02x}")
+                    elif idx < chunk_len:
+                        hex_str_parts.append(f"{chunk[idx]:02x}  ")
+                    else:
+                        hex_str_parts.append("    ")
+                
+                hex_str = " ".join(hex_str_parts)
+
+                ascii_str = ""
+                for byte in chunk:
+                    if 32 <= byte <= 126:
+                        ascii_str += chr(byte)
+                    else:
+                        ascii_str += "."
+                
+                ascii_str_padded = f"{ascii_str:<16}"
+
+                print(f"{offset_str}{hex_str}  {ascii_str_padded}")
+
+                offset += chunk_len
+
+    except FileNotFoundError:
+        print(f"Error: File not found at '{filepath}'")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
 def modo_manual(alu):
     """ Executa a ULA no modo manual """
     
