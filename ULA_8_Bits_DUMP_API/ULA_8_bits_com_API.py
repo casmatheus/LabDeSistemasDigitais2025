@@ -2,10 +2,17 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 from PIL import ImageTk, Image
+import sys
 import os
 import warnings
 import time
-import dump
+from dump import *
+import requests
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+from waitress import serve
+import webbrowser
+import tempfile
 
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "1"
 warnings.filterwarnings('ignore', category=UserWarning, module='pygame.pkgdata')
@@ -107,7 +114,7 @@ def pegarNomeFlag(opcode, flag):
     if opcode == OP_MUL:
         return "Overflow"
     if opcode == OP_DIV:
-        return "Div por Zero"
+        return "Divisão por Zero"
     return "Flag"  # Nome padrão para flag=1 sem caso especial
 
 def imprimir_na_caixa(op_str, resultado, flag, operacao, is_final=False):
@@ -211,6 +218,7 @@ def print_menu_modo():
     print(INDENT + "║                                       ║")
     print(INDENT + "║         (1) Modo Manual               ║")
     print(INDENT + "║         (2) Modo Automatico           ║")
+    print(INDENT + "║         (3) Dump de Memória           ║")
     print(INDENT + "║                                       ║")
     print(INDENT + "╚═══════════════════════════════════════╝")
     print("\n")
@@ -226,57 +234,6 @@ def print_painel_operacoes():
     print(INDENT + "║  ╚═══════════╝  ╚══════════╝  ╚════════════╝  ╚═══════════════╝  ║")
     print(INDENT + "╚══════════════════════════════════════════════════════════════════╝")
     print()
-
-def dump_binary_file(filepath, title):
-    
-    BYTES_PER_LINE = 16
-    LINE_WIDTH = 67
-
-    title_str = f" {title} "
-    print(INDENT + title_str.center(LINE_WIDTH, '='))
-
-    try:
-        with open(filepath, 'rb') as f:
-            offset = 0
-            while True:
-                # Read a chunk of 16 bytes
-                chunk = f.read(BYTES_PER_LINE)
-                if not chunk:
-                    break  # End of file
-
-                chunk_len = len(chunk)
-
-                offset_str = INDENT + f"{offset:08x}: "  # e.g., "00000000: "
-
-                hex_str_parts = []
-                for i in range(8):
-                    idx = i * 2
-                    if idx + 1 < chunk_len:
-                        hex_str_parts.append(f"{chunk[idx]:02x}{chunk[idx+1]:02x}")
-                    elif idx < chunk_len:
-                        hex_str_parts.append(f"{chunk[idx]:02x}  ")
-                    else:
-                        hex_str_parts.append("    ")
-                
-                hex_str = " ".join(hex_str_parts)
-
-                ascii_str = ""
-                for byte in chunk:
-                    if 32 <= byte <= 126:
-                        ascii_str += chr(byte)
-                    else:
-                        ascii_str += "."
-                
-                ascii_str_padded = f"{ascii_str:<16}"
-
-                print(f"{offset_str}{hex_str}  {ascii_str_padded}")
-
-                offset += chunk_len
-
-    except FileNotFoundError:
-        print(f"Error: File not found at '{filepath}'")
-    except Exception as e:
-        print(f"An error occurred: {e}")
 
 def modo_manual(alu):
     """ Executa a ULA no modo manual """
@@ -393,6 +350,53 @@ def modo_automatico(alu):
     resultado_r, flag = alu.execute(0, resultado_r, OP_NOT)
     imprimir_na_caixa(f"~R (~{resultado_r_anterior})", resultado_r, flag, OP_NOT, is_final=True)
 
+def modo_dump():
+    if (arduinoPort == None):
+        print(f"{INDENT}Não é possível realizar o dump de memória sem a Arduino Conectada")
+        return
+    
+    while True:
+        escolha = inputEscolha("Escolha qual Memória Visualizar: ",
+                               ["Registradores Gerais", "Heatmap Registradores Gerais", "Registradores de IO", "Heatmap Registradores I/O", "EEPROM",
+                                "Flash", "SRAM", "Voltar"])
+                      
+        if (escolha == "Registradores Gerais"):
+            registradores_gerais_dump()
+            print(dump_registradores_gerais(ARQUIVO_REGISTRADORES_GERAIS_BINARIO, "Registradores Gerais (R0-R31)"))
+            
+        elif (escolha == "Registradores de I/O"):
+            registradores_IO_dump()
+            print(dump_registradores_io(ARQUIVO_REGISTRADORES_IO_BINARIO, "Registradores I/O (ATmega328p)", IO_REGISTER_MAP))
+
+        elif (escolha == "EEPROM"):
+            eeprom_dump()
+            print(dump_binary_file(ARQUIVO_EEPROM_BINARIO, "EEPROM Dump (1KB)"))
+
+        elif (escolha == "SRAM"):
+            sram_dump()
+            print(dump_binary_file(ARQUIVO_SRAM_BINARIO, "SRAM Dump (2KB)"))
+
+        elif (escolha == "Flash"):
+            flash_dump()
+            print(dump_binary_file(ARQUIVO_FLASH_BINARIO, "Flash Dump (32KB)"))
+        
+        elif (escolha == "Heatmap Registradores Gerais"):
+            if registradores_gerais_dump():
+                svg = heatmap_gerais_svg(ARQUIVO_REGISTRADORES_GERAIS_BINARIO)
+                abrir_svg_externo(svg, "heatmap_gpr")
+            else:
+                print(f"{INDENT}Erro ao ler registradores para heatmap.")
+
+        elif (escolha == "Heatmap Registradores I/O"):
+            if registradores_IO_dump():
+                svg = heatmap_io_svg(ARQUIVO_REGISTRADORES_IO_BINARIO, IO_REGISTER_MAP)
+                abrir_svg_externo(svg, "heatmap_io")
+            else:
+                print(f"{INDENT}Erro ao ler I/O para heatmap.")
+
+        elif (escolha == "Voltar"):
+            break
+
 class ALU_8bit:
     """
     Operações da ULA:
@@ -457,9 +461,56 @@ class ALU_8bit:
 
         return result, flag
 
+
+def abrir_svg_externo(svg_content, prefixo="heatmap"):
+    """ Salva o conteúdo SVG em um arquivo temporário e abre no navegador padrão. """
+    if not svg_content:
+        print("Erro: Conteúdo SVG vazio.")
+        return
+        
+    try:
+        fd, path = tempfile.mkstemp(prefix=f"{prefixo}_", suffix=".html")
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            # HTML com CSS para centralizar e limitar o tamanho sem scroll
+            f.write("""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Visualizador de Heatmap</title>
+                <style>
+                    body {
+                        margin: 0;
+                        height: 100vh; /* Ocupa 100% da altura da tela */
+                        display: flex;
+                        justify-content: center; /* Centraliza horizontalmente */
+                        align-items: center;     /* Centraliza verticalmente */
+                        background-color: #f0f2f5;
+                        overflow: hidden;        /* Impede barras de rolagem */
+                    }
+                    svg {
+                        /* Limita o tamanho para 95% da tela, mantendo a proporção */
+                        max-width: 95vw;
+                        max-height: 95vh;
+                        width: auto;
+                        height: auto;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* Uma sombra para destacar */
+                    }
+                </style>
+            </head>
+            <body>
+            """)
+            f.write(svg_content)
+            f.write("</body></html>")
+        
+        webbrowser.open('file://' + os.path.realpath(path))
+        
+    except Exception as e:
+        print(f"Erro ao tentar abrir SVG externamente: {e}")
+
 #
 # --- CLASSE DA INTERFACE GRÁFICA (GUI) ---
 #
+
 class AluGUI:
 
     MODO_MANUAL = '1'
@@ -473,7 +524,8 @@ class AluGUI:
 
         self.root = root
         self.root.title("Simulador ULA 8-bits")
-        self.root.minsize(512, 270)
+        # Aumentei o minsize para acomodar a nova aba
+        self.root.minsize(700, 500) 
         self.root.resizable(True, True)
         self.root.rowconfigure(0, weight=1)
         self.root.columnconfigure(0, weight=1)
@@ -511,7 +563,6 @@ class AluGUI:
         self.root.option_add('*TCombobox*Listbox.font', default_font)
 
 
-
         style.configure(".", font=default_font) # '.' aplica a todos
         style.configure("TButton", font=default_font)
         style.configure("TLabel", font=default_font)
@@ -534,19 +585,20 @@ class AluGUI:
         style.configure(
             "Highlight.TLabelframe",
             labelanchor='n',
-            background=COR_DESTAQUE_FUNDO  # <-- Muda o fundo do frame
+            background=COR_DESTAQUE_FUNDO
         )
         style.configure(
             "Highlight.TLabelframe.Label",
             font=font_titulo,
-            foreground=COR_DESTAQUE_TEXTO, # <-- Muda o texto
-            background=COR_DESTAQUE_FUNDO  # <-- Muda o fundo do label (para combinar)
+            foreground=COR_DESTAQUE_TEXTO,
+            background=COR_DESTAQUE_FUNDO
         )
 
         # --- Cria o frame principal ---
         main_frame = ttk.Frame(root, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(2, weight=1) # Permite que o notebook expanda
 
         # --- Banner ---
         img = Image.open('imagens/BannerUFRJ.png')
@@ -564,11 +616,35 @@ class AluGUI:
         row += 1
         separator = ttk.Separator(main_frame, orient='horizontal')
         separator.grid(row=row, column=0, sticky='ew', pady=5)
+        
+        # --- MUDANÇA AQUI: Cria o Notebook (Abas) ---
+        row += 1
+        self.notebook = ttk.Notebook(main_frame)
+        self.notebook.grid(row=row, column=0, sticky="nsew", padx=5, pady=5)
+        
+        # --- Cria as duas abas (frames) ---
+        self.tab_ula = ttk.Frame(self.notebook, padding="10")
+        self.tab_dump = ttk.Frame(self.notebook, padding="10")
+        
+        self.notebook.add(self.tab_ula, text='Simulador ULA')
+        self.notebook.add(self.tab_dump, text='Dump de Memória')
+
+        # --- Chama as funções para popular cada aba ---
+        self.criar_aba_ula()
+        self.criar_aba_dump()
+
+        # self.tocarAudio("insiraEntrada.mp3")
+
+    def criar_aba_ula(self):
+        """Popula a aba 'Simulador ULA' com os widgets antigos."""
+        
+        # Configura o grid da aba
+        self.tab_ula.columnconfigure(0, weight=1)
 
         # --- Ecolha de MODO ---
-        row += 1
-        self.mode_frame = ttk.LabelFrame(main_frame, text="Modo de Operação", padding="10", labelanchor='n')
-        self.mode_frame.grid(row=row, column=0, padx=5, pady=5, sticky="ew")
+        row = 0
+        self.mode_frame = ttk.LabelFrame(self.tab_ula, text="Modo de Operação", padding="10", labelanchor='n')
+        self.mode_frame.grid(row=row, column=0, pady=5, sticky="ew")
         
         ttk.Radiobutton(self.mode_frame, text="Modo Manual", variable=self.modo, 
                         value=self.MODO_MANUAL, command=self.atualizarBotoesEntrada).pack(side=tk.LEFT, padx=50)
@@ -578,44 +654,53 @@ class AluGUI:
         # --- Seção de Entradas ---
         row += 1
         larguraEntrada = 10
-        self.input_frame = ttk.LabelFrame(main_frame, text="Entradas", padding="10", labelanchor='n')
-        self.input_frame.grid(row=row, column=0, padx=5, pady=5)
+        self.input_frame = ttk.LabelFrame(self.tab_ula, text="Entradas", padding="10", labelanchor='n')
+        self.input_frame.grid(row=row, column=0, pady=5, sticky="ew")
         
-        ttk.Label(self.input_frame, text="Entrada A (8 Bits):").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        # Centraliza o frame de inputs
+        self.input_frame.columnconfigure(0, weight=1)
+        self.input_frame.columnconfigure(3, weight=1)
+        
+        ttk.Label(self.input_frame, text="Entrada A (8 Bits):").grid(row=0, column=1, padx=5, pady=5, sticky=tk.E)
         self.x_entry = ttk.Entry(self.input_frame, width=larguraEntrada)
-        self.x_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
+        self.x_entry.grid(row=0, column=2, padx=5, pady=5, sticky=tk.W)
         self.x_entry.insert(0, f"{0:08b}")
         self.xString = tk.StringVar(value="(Decimal: 0)")
         self.x_entry.bind("<FocusOut>", self.atualizarStringsDasCaixas)
-        ttk.Label(self.input_frame, textvariable=self.xString).grid(row=0, column=2, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(self.input_frame, textvariable=self.xString).grid(row=0, column=3, padx=5, pady=5, sticky=tk.W)
 
 
-        ttk.Label(self.input_frame, text="Entrada B (8 Bits):").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(self.input_frame, text="Entrada B (8 Bits):").grid(row=1, column=1, padx=5, pady=5, sticky=tk.E)
         self.y_entry = ttk.Entry(self.input_frame, width=larguraEntrada)
-        self.y_entry.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
+        self.y_entry.grid(row=1, column=2, padx=5, pady=5, sticky=tk.W)
         self.y_entry.insert(0, f"{0:08b}")
         self.yString = tk.StringVar(value="(Decimal: 0)")
         self.y_entry.bind("<FocusOut>", self.atualizarStringsDasCaixas)
-        ttk.Label(self.input_frame, textvariable=self.yString).grid(row=1, column=2, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(self.input_frame, textvariable=self.yString).grid(row=1, column=3, padx=5, pady=5, sticky=tk.W)
 
-        ttk.Label(self.input_frame, text="Operação:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(self.input_frame, text="Operação:").grid(row=2, column=1, padx=5, pady=5, sticky=tk.E)
         self.op_combo = ttk.Combobox(self.input_frame, values=list(self.op_map.keys()), state="readonly", width=15)
-        self.op_combo.grid(row=2, column=1, padx=5, pady=5, sticky=tk.W)
+        self.op_combo.grid(row=2, column=2, padx=5, pady=5, sticky=tk.W)
         self.op_combo.current(0)
         self.comboStr = tk.StringVar(value=f"({0:03b})")
         self.op_combo.bind("<FocusOut>", self.atualizarStringsDasCaixas)
-        ttk.Label(self.input_frame, textvariable=self.comboStr).grid(row=2, column=2, padx=5, pady=5, sticky=tk.W)
-
+        ttk.Label(self.input_frame, textvariable=self.comboStr).grid(row=2, column=3, padx=5, pady=5, sticky=tk.W)
 
         # --- Botão de Execução ---
         row += 1
-        self.execute_button = ttk.Button(main_frame, text="Executar Operação", command=self.calcular)
+        self.execute_button = ttk.Button(self.tab_ula, text="Executar Operação", command=self.calcular)
         self.execute_button.grid(row=row, column=0, padx=5, pady=10)
 
         # --- Seção de Saídas ---
         row += 1
-        self.output_frame = ttk.LabelFrame(main_frame, text="Saídas", padding="10", labelanchor='n')
-        self.output_frame.grid(row=row, column=0, padx=5, pady=5)
+        self.output_frame = ttk.LabelFrame(self.tab_ula, text="Saídas", padding="10", labelanchor='n')
+        self.output_frame.grid(row=row, column=0, pady=5, sticky="ew")
+        
+        # Centraliza as saídas
+        self.output_frame.columnconfigure(0, weight=1) 
+        
+        output_inner_frame = ttk.Frame(self.output_frame) # Frame para alinhar texto à esquerda
+        output_inner_frame.grid(row=0, column=0) 
 
         # Variáveis para atualizar os labels de resultado
         self.z_op_var  = tk.StringVar(value="Operação: -")
@@ -624,14 +709,139 @@ class AluGUI:
         self.z_bin_var = tk.StringVar(value="Binário: -")
         self.flag_var  = tk.StringVar(value="Flag: -")
 
-        ttk.Label(self.output_frame, textvariable=self.z_op_var, style="Result.TLabel").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Label(self.output_frame, textvariable=self.z_dec_var, style="Result.TLabel").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Label(self.output_frame, textvariable=self.z_hex_var, style="Result.TLabel").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Label(self.output_frame, textvariable=self.z_bin_var, style="Result.TLabel").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Label(self.output_frame, textvariable=self.flag_var, style="Result.TLabel").grid(row=4, column=0, padx=5, pady=10, sticky=tk.W)
+        ttk.Label(output_inner_frame, textvariable=self.z_op_var, style="Result.TLabel").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(output_inner_frame, textvariable=self.z_dec_var, style="Result.TLabel").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(output_inner_frame, textvariable=self.z_hex_var, style="Result.TLabel").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(output_inner_frame, textvariable=self.z_bin_var, style="Result.TLabel").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Label(output_inner_frame, textvariable=self.flag_var, style="Result.TLabel").grid(row=4, column=0, padx=5, pady=10, sticky=tk.W)
 
-        # self.tocarAudio("insiraEntrada.mp3")
-    
+    def criar_aba_dump(self):
+        """Popula a aba 'Dump de Memória' com os novos widgets."""
+        
+        # Configura o grid da aba
+        self.tab_dump.rowconfigure(1, weight=1)
+        self.tab_dump.columnconfigure(0, weight=1)
+        
+        # --- Frame para os Botões ---
+        dump_button_frame = ttk.Frame(self.tab_dump)
+        dump_button_frame.grid(row=0, column=0, sticky='ew', pady=5)
+        # Centraliza os botões
+        dump_button_frame.columnconfigure(0, weight=1)
+        dump_button_frame.columnconfigure(6, weight=1)
+        
+        ttk.Button(dump_button_frame, text="Regs. Gerais", command=self.run_dump_gerais).grid(row=0, column=1, padx=2)
+        ttk.Button(dump_button_frame, text="Regs. I/O", command=self.run_dump_io).grid(row=0, column=2, padx=2)
+        ttk.Button(dump_button_frame, text="EEPROM", command=self.run_dump_eeprom).grid(row=0, column=3, padx=2)
+        ttk.Button(dump_button_frame, text="Flash", command=self.run_dump_flash).grid(row=0, column=4, padx=2)
+        ttk.Button(dump_button_frame, text="SRAM", command=self.run_dump_sram).grid(row=0, column=5, padx=2)
+
+        ttk.Separator(dump_button_frame, orient='vertical').grid(row=0, column=6, sticky='ns', padx=5)
+        ttk.Button(dump_button_frame, text="Heatmap Regs. Gerais", command=self.abrir_heatmap_gerais).grid(row=0, column=7, padx=2)
+        ttk.Button(dump_button_frame, text="Heatmap Regs. I/O", command=self.abrir_heatmap_io).grid(row=0, column=8, padx=2)
+
+
+        # --- Frame para a Saída de Texto (com scrollbars) ---
+        text_frame = ttk.Frame(self.tab_dump)
+        text_frame.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
+        text_frame.rowconfigure(0, weight=1)
+        text_frame.columnconfigure(0, weight=1)
+
+        self.dump_output_text = tk.Text(text_frame, wrap='none', height=20, width=80, font=("Courier", 10))
+        self.dump_output_text.grid(row=0, column=0, sticky='nsew')
+        
+        vsb = ttk.Scrollbar(text_frame, orient="vertical", command=self.dump_output_text.yview)
+        vsb.grid(row=0, column=1, sticky='ns')
+        
+        hsb = ttk.Scrollbar(text_frame, orient="horizontal", command=self.dump_output_text.xview)
+        hsb.grid(row=1, column=0, sticky='ew')
+        
+        self.dump_output_text.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+    def run_dump(self, action_func, format_func, *format_args, force_heatmap=None):
+        """
+        Função genérica para rodar um dump e exibir a string de saída.
+        Erros de 'print' irão para o console, não para a GUI.
+        """
+        self.dump_output_text.delete('1.0', tk.END)
+        
+        if arduinoPort is None:
+            self.dump_output_text.insert(tk.END, "Não é possível realizar o dump de memória sem a Arduino Conectada\n")
+            return
+            
+        try:
+            action_func()
+
+            if force_heatmap == "gerais":
+                svg = heatmap_gerais_svg(ARQUIVO_REGISTRADORES_GERAIS_BINARIO)
+                abrir_svg_externo(svg, "heatmap_gpr")
+                self.dump_output_text.insert(tk.END, "Heatmap dos Registradores Gerais aberto no seu navegador padrão.\n")
+                return
+            elif force_heatmap == "io":
+                svg = heatmap_io_svg(ARQUIVO_REGISTRADORES_IO_BINARIO, IO_REGISTER_MAP)
+                abrir_svg_externo(svg, "heatmap_io")
+                self.dump_output_text.insert(tk.END, "Heatmap de I/O aberto no seu navegador padrão.\n")
+                return
+            
+            output_string = format_func(*format_args)
+            
+            self.dump_output_text.insert(tk.END, output_string)
+
+        except Exception as e:
+            self.dump_output_text.insert(tk.END, f"\nOcorreu um erro durante a formatação: {e}")
+            
+    def run_dump_gerais(self):
+        self.run_dump(
+            registradores_gerais_dump,
+            dump_registradores_gerais,
+            ARQUIVO_REGISTRADORES_GERAIS_BINARIO, 
+            "Registradores Gerais (R0-R31)",
+            ""
+        )
+
+    def run_dump_io(self):
+        self.run_dump(
+            registradores_IO_dump,
+            dump_registradores_io,
+            ARQUIVO_REGISTRADORES_IO_BINARIO, 
+            "Registradores I/O (ATmega328p)", 
+            IO_REGISTER_MAP,
+            ""
+        )
+
+    def run_dump_eeprom(self):
+        self.run_dump(
+            eeprom_dump,
+            dump_binary_file,
+            ARQUIVO_EEPROM_BINARIO, 
+            "EEPROM Dump (1KB)",
+            ""
+        )
+
+    def run_dump_sram(self):
+        self.run_dump(
+            sram_dump,
+            dump_binary_file,
+            ARQUIVO_SRAM_BINARIO, 
+            "SRAM Dump (2KB)",
+            ""
+        )
+
+    def run_dump_flash(self):
+        self.run_dump(
+            flash_dump,
+            dump_binary_file,
+            ARQUIVO_FLASH_BINARIO, 
+            "Flash Dump (32KB)",
+            ""
+        )
+
+    def abrir_heatmap_gerais(self):
+        self.run_dump(registradores_gerais_dump, lambda *a: "Heatmap GPR aberto no navegador.", force_heatmap="gerais")
+
+    def abrir_heatmap_io(self):
+        self.run_dump(registradores_IO_dump, lambda *a: "Heatmap I/O aberto no navegador.", force_heatmap="io")
+
+
     def highlightSaida(self):
         """ Aplica o estilo de destaque ao frame de saída. """
         try:
@@ -841,7 +1051,6 @@ class AluGUI:
 
             self.etapaAutomatica += 1
 
-
 def interfaceTerminal(alu):
     with open("texto/UFRJascii.txt", "r", encoding="utf-8") as f:
         banner = f.read()
@@ -855,40 +1064,225 @@ def interfaceTerminal(alu):
         print_menu_modo()
         
         try:
-            modo = inputLoop(f"{INDENT}Digite sua Opção: ", tipo=int, min_v=1, max_v=2)
+            modo = inputLoop(f"{INDENT}Digite sua Opção: ", tipo=int, min_v=1, max_v=3)
         except (KeyboardInterrupt, EOFError):
             print(f"\n{INDENT}Saindo...")
             break
 
-        if modo == 1: # MANUAL
+        if modo == 1: # Manual
             modo_manual(alu)
-        elif modo == 2: # AUTOMATICO
+        elif modo == 2: # Automatico
             modo_automatico(alu)
+        elif modo == 3: # Dump 
+            modo_dump()
         
-        print("\n" + INDENT + "--- Operação Concluída ---")
+        print("\n")
         input(INDENT + "Pressione Enter para voltar ao menu principal...")
-        print("\n" * 5) # Limpa a tela
+        print("\n")
         
+def iniciar_servidor_web(alu_instance, host, port):
+    """
+    Inicia um servidor Flask para controlar a ULA via API HTTP.
+    Reutiliza a instância 'alu_instance' principal.
+    """
+
+    app = Flask(__name__)
+    CORS(app) # Permite que o cliente web acesse a API
+
+    print(f"{INDENT}Servidor Web da ULA iniciado em http://{host}:{port}")
+
+    @app.route('/api/manual', methods=['POST'])
+    def handle_manual():
+        """
+        Executa um único comando manual da ULA.
+        Recebe: {"x": int, "y": int, "opcode": int}
+        """
+        if not request.json or 'x' not in request.json or 'y' not in request.json or 'opcode' not in request.json:
+            return jsonify({"error": "Requisição JSON inválida. Envie x, y, e opcode."}), 400
+        
+        try:
+            x = int(request.json['x'])
+            y = int(request.json['y'])
+            opcode = int(request.json['opcode'])
+        except ValueError:
+            return jsonify({"error": "x, y, e opcode devem ser números inteiros."}), 400
+
+        resultado, flag = alu_instance.execute(x, y, opcode)
+        
+        op_str = op2str(x, y, opcode)
+        flag_nome = pegarNomeFlag(opcode, flag)
+
+        response_data = {
+            "operacao": op_str,
+            "resultado_dec": resultado,
+            "resultado_hex": f"0x{resultado:02X}",
+            "resultado_bin": f"{resultado:08b}",
+            "flag_val": flag,
+            "flag_nome": flag_nome
+        }
+        return jsonify(response_data)
+
+    @app.route('/api/automatico', methods=['POST'])
+    def handle_automatico():
+        """
+        Executa a sequência automática completa.
+        Recebe: {"a": int, "b": int}
+        """
+        if not request.json or 'a' not in request.json or 'b' not in request.json:
+            return jsonify({"error": "Requisição JSON inválida. Envie a e b."}), 400
+            
+        try:
+            a = int(request.json['a'])
+            b = int(request.json['b'])
+        except ValueError:
+            return jsonify({"error": "a e b devem ser números inteiros."}), 400
+        
+        passos = []
+        
+        # R = A + B
+        opcode_atual = OP_ADD
+        r, f = alu_instance.execute(a, b, opcode_atual)
+        passos.append({"op": "A + B", "res_dec": r, "res_hex": f"0x{r:02X}", "res_bin": f"{r:08b}", "flag_val": f, "flag_nome": pegarNomeFlag(opcode_atual, f)})
+        
+        # R = R * R
+        opcode_atual = OP_MUL
+        r_ant = r
+        r, f = alu_instance.execute(r_ant, r_ant, opcode_atual)
+        passos.append({"op": f"R * R ({r_ant} * {r_ant})", "res_dec": r, "res_hex": f"0x{r:02X}", "res_bin": f"{r:08b}", "flag_val": f, "flag_nome": pegarNomeFlag(opcode_atual, f)})
+        
+        # R = R - B
+        opcode_atual = OP_SUB
+        r_ant = r
+        r, f = alu_instance.execute(r_ant, b, opcode_atual)
+        passos.append({"op": f"R - B ({r_ant} - {b})", "res_dec": r, "res_hex": f"0x{r:02X}", "res_bin": f"{r:08b}", "flag_val": f, "flag_nome": pegarNomeFlag(opcode_atual, f)})
+
+        # R = R - A
+        opcode_atual = OP_SUB # Ainda SUB
+        r_ant = r
+        r, f = alu_instance.execute(r_ant, a, opcode_atual)
+        passos.append({"op": f"R - A ({r_ant} - {a})", "res_dec": r, "res_hex": f"0x{r:02X}", "res_bin": f"{r:08b}", "flag_val": f, "flag_nome": pegarNomeFlag(opcode_atual, f)})
+
+        # R = R / B
+        opcode_atual = OP_DIV
+        r_ant = r
+        r, f = alu_instance.execute(r_ant, b, opcode_atual)
+        passos.append({"op": f"R / B ({r_ant} / {b})", "res_dec": r, "res_hex": f"0x{r:02X}", "res_bin": f"{r:08b}", "flag_val": f, "flag_nome": pegarNomeFlag(opcode_atual, f)})
+
+        # R = R & A
+        opcode_atual = OP_AND
+        r_ant = r
+        r, f = alu_instance.execute(r_ant, a, opcode_atual)
+        passos.append({"op": f"R & A ({r_ant} & {a})", "res_dec": r, "res_hex": f"0x{r:02X}", "res_bin": f"{r:08b}", "flag_val": f, "flag_nome": pegarNomeFlag(opcode_atual, f)})
+
+        # R = ~R
+        opcode_atual = OP_NOT
+        r_ant = r
+        r, f = alu_instance.execute(0, r_ant, opcode_atual) # X é irrelevante para NOT
+        passos.append({"op": f"~R (~{r_ant})", "res_dec": r, "res_hex": f"0x{r:02X}", "res_bin": f"{r:08b}", "flag_val": f, "flag_nome": pegarNomeFlag(opcode_atual, f)})
+
+        # R = R | A
+        opcode_atual = OP_OR
+        r_ant = r
+        r, f = alu_instance.execute(r_ant, a, opcode_atual)
+        passos.append({"op": f"R | A ({r_ant} | {a})", "res_dec": r, "res_hex": f"0x{r:02X}", "res_bin": f"{r:08b}", "flag_val": f, "flag_nome": pegarNomeFlag(opcode_atual, f)})
+
+        # R = R + A
+        opcode_atual = OP_ADD
+        r_ant = r
+        r, f = alu_instance.execute(r_ant, a, opcode_atual)
+        passos.append({"op": f"R + A ({r_ant} + {a})", "res_dec": r, "res_hex": f"0x{r:02X}", "res_bin": f"{r:08b}", "flag_val": f, "flag_nome": pegarNomeFlag(opcode_atual, f)})
+
+        # R = ~R (Final)
+        opcode_atual = OP_NOT
+        r_ant = r
+        r, f = alu_instance.execute(0, r_ant, opcode_atual)
+        passos.append({"op": f"~R (~{r_ant})", "res_dec": r, "res_hex": f"0x{r:02X}", "res_bin": f"{r:08b}", "flag_val": f, "flag_nome": pegarNomeFlag(opcode_atual, f)})
+
+        return jsonify({"passos": passos})
+
+
+    @app.route('/api/dump', methods=['POST'])
+    def handle_dump():
+        data = request.get_json(force=True, silent=True)
+        if not data or 'type' not in data:
+            return jsonify({"error": "Tipo de dump não fornecido"}), 400
+        
+        t = data['type']
+        resp = ""
+        is_html_response = False
+        sucesso = False
+
+        try:
+            if t == 'gerais':
+                 sucesso = registradores_gerais_dump()
+                 if sucesso: resp = dump_registradores_gerais(ARQUIVO_REGISTRADORES_GERAIS_BINARIO, "Registradores Gerais", indent="")
+            elif t == 'io':
+                 sucesso = registradores_IO_dump()
+                 if sucesso: resp = dump_registradores_io(ARQUIVO_REGISTRADORES_IO_BINARIO, "Registradores I/O", IO_REGISTER_MAP, indent="")
+            elif t == 'eeprom':
+                 sucesso = eeprom_dump()
+                 if sucesso: resp = dump_binary_file(ARQUIVO_EEPROM_BINARIO, "EEPROM Dump (1KB)", indent="")
+            elif t == 'sram':
+                 sucesso = sram_dump()
+                 if sucesso: resp = dump_binary_file(ARQUIVO_SRAM_BINARIO, "SRAM Dump (2KB)", indent="")
+            elif t == 'flash':
+                 sucesso = flash_dump()
+                 if sucesso: resp = dump_binary_file(ARQUIVO_FLASH_BINARIO, "Flash Dump (32KB)", indent="")
+            elif t == 'heatmap_gerais':
+                registradores_gerais_dump()
+                resp = heatmap_gerais_svg(ARQUIVO_REGISTRADORES_GERAIS_BINARIO)
+                sucesso = resp
+                is_html_response = True
+            elif t == 'heatmap_io':
+                registradores_IO_dump()
+                resp = heatmap_io_svg(ARQUIVO_REGISTRADORES_IO_BINARIO, IO_REGISTER_MAP)
+                sucesso = resp
+                is_html_response = True
+            else:
+                return jsonify({"error": "Tipo de dump inválido"}), 400
+
+            if not sucesso:
+                return jsonify({"error": "Falha ao realizar o dump. Verifique se o Arduino está conectado e tente novamente."}), 503
+
+            return jsonify({"response": resp, "is_html": is_html_response})
+
+        except Exception as e:
+             return jsonify({"error": f"Erro interno no servidor: {e}"}), 500
+
+    print(f"\n{INDENT}--- Servidor ULA Iniciado ---")
+    print(f"{INDENT}Ouvindo em: http://{host}:{port}")
+    print(f"{INDENT}Pressione Ctrl+C para parar o servidor.")
+    
+    serve(app, host=host, port=port, threads=1)
+
 
 if __name__ == "__main__":
 
     print("")
     
-    #Cria os objetos centrais UMA VEZ 
     alu_principal = ALU_8bit()
     
     escolha = inputEscolha("Escolha o tipo de Interface: ",
-                               ["Gráfica", "Terminal"])
+                               ["Gráfica", "Terminal", "Servidor"])
                                
     if (escolha == "Gráfica"):
-        # Inicia o modulo de audio
         pygame.mixer.init()
 
-        # Inicia a aplicação gráfica
         root = tk.Tk()
         app = AluGUI(root)
         root.mainloop()
         
     elif (escolha == "Terminal"):
-        print(f"{INDENT}Iniciando Interface de Terminal...")
         interfaceTerminal(alu_principal)
+
+    elif (escolha == "Servidor"):
+        print(f"{INDENT}Iniciando Interface de Servidor Web...")
+        
+        porta_servidor = inputLoop(f"{INDENT}Digite a porta para este servidor (ex: 9001): ", tipo=int, min_v=1025, max_v=65535)
+        HOST = '127.0.0.1'
+        
+        print(f"{INDENT}Servidor pronto para aceitar conexões em: http://{HOST}:{porta_servidor}")
+        
+        iniciar_servidor_web(alu_principal, HOST, porta_servidor)
+
+
