@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Cliente Web - ULA 8 Bits</title>
+    <style>
+        /* --- Estilos Base --- */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: 20px auto; padding: 20px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); }
+        #banner { display: block; max-width: 50%; height: auto; margin: 0 auto 20px auto; }
+        .connection-area { background-color: #f9f9f9; border: 1px solid #ddd; padding: 15px; border-radius: 6px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        .connection-area label { font-weight: bold; flex-shrink: 0; }
+        .connection-area input { flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .tab-nav { border-bottom: 2px solid #ccc; margin-bottom: 20px; }
+        .tab-nav button { padding: 10px 20px; border: none; background-color: transparent; font-size: 16px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; color: #555; }
+        .tab-nav button.active { font-weight: bold; color: #0056b3; border-bottom-color: #0056b3; }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; text-align: center; }
+
+        /* --- Consoles --- */
+        .console { min-height: 150px; max-height: 600px; border: 1px solid #ccc; background: #fdfdfd; overflow-y: scroll; padding: 10px; margin-top: 10px; text-align: left; font-family: "Courier New", monospace; }
+        .console pre { margin: 0; font-family: inherit; white-space: pre-wrap; }
+        .console div { padding: 4px; border-bottom: 1px dashed #eee; }
+        .console .res-final { background-color: #d4edda; color: #155724; font-weight: bold; border-left: 4px solid #28a745; padding-left: 8px; margin-left: -12px; }
+        .console.err { background-color: #fff5f5; border-color: #dc3545; color: #dc3545; font-weight: bold; }
+        .console .err { color: #dc3545; background-color: #ffe6e6; border-left: 4px solid #dc3545; padding-left: 8px; margin-left: -12px; font-weight: bold; }
+        .console .op { color: #0055aa; }
+        .loading { display: none; margin-left: 10px; font-style: italic; color: #555; }
+        .visible { display: inline-block; }
+        .log-line { display: flex; }
+        .log-op { width: 420px; flex-shrink: 0; white-space: nowrap; }
+        .log-flag { padding-left: 10px; border-left: 1px solid #eee; white-space: nowrap; }
+        .res-final .log-op, .res-final .log-flag { background-color: #d4edda; color: #155724; font-weight: bold; }
+        .res-final .log-flag { border-left-color: #28a745; }
+        
+        /* Estilos para centralizar o SVG no console */
+        .console-svg-container { display: flex; justify-content: center; padding: 10px; background-color: #fff; max-height: 75vh; overflow: hidden; }
+
+        .console-svg-container svg {width: 100%; height: auto; max-width: 100%; max-height: 70vh; }
+
+        input[type="text"], input[type="number"], select, button { padding: 8px 12px; font-size: 14px; margin: 5px; border-radius: 4px; border: 1px solid #ccc; }
+        input[type="text"] { font-family: "Courier New", monospace; }
+        button { background-color: #007bff; color: white; cursor: pointer; border-color: #007bff; transition: background-color 0.2s; }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #ccc; border-color: #ccc; cursor: not-allowed; }
+        
+        .input-area-wrapper { display: inline-block; text-align: left; margin-bottom: 20px; }
+        .input-group { margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+        .input-group label { width: 130px; line-height: 1.4; flex-shrink: 0; text-align: center; font-weight: bold; }
+        .dec-display { font-family: "Courier New", monospace; font-size: 14px; color: #555; margin-left: 8px; min-width: 45px; }
+        .dump-buttons { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+        /* Botões de Heatmap com cor diferente para destaque */
+        .btn-heatmap { background-color: #17a2b8; border-color: #17a2b8; }
+        .btn-heatmap:hover { background-color: #138496; }
+
+        .progress-container { width: 100%; height: 24px; background-color: #e9ecef; border-radius: 12px; overflow: hidden; display: none; margin: 20px 0; border: 1px solid #dee2e6; opacity: 1; transition: opacity 0.5s ease-out; }
+        .progress-container.fade-out { opacity: 0; }
+        .progress-bar { height: 100%; width: 0%; background-color: #007bff; transition: width 0.2s ease, background-color 0.2s ease; }
+        @keyframes load-2s { from { width: 0%; } to { width: 95%; } }
+        .progress-bar.animate { animation: load-2s 2s ease-out forwards; }
+        .progress-bar.error { width: 100% !important; background-color: #dc3545 !important; animation: none !important; transition: none !important; }
+        .progress-bar.success { width: 100% !important; background-color: #28a745 !important; animation: none !important; }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img id="banner" src="imagens/BannerUFRJ.png" alt="Logo Minerva UFRJ">
+        <div class="connection-area">
+            <label for="server-url">URL do Servidor ULA:</label>
+            <input type="text" id="server-url" value="http://127.0.0.1:9001">
+        </div>
+        <div class="tab-nav">
+            <button id="tab-btn-manual" class="active">Modo Manual</button>
+            <button id="tab-btn-auto">Modo Automático</button>
+            <button id="tab-btn-dump">Dump de Memória</button>
+        </div>
+
+        <div id="tab-content-manual" class="tab-pane active">
+            <h3>Modo Manual</h3>
+            <div class="input-area-wrapper">
+                <div class="input-group"><label for="manual-x">Entrada X<br>(8 Bits)</label><input type="text" id="manual-x" value="00000000" maxlength="8"><span id="manual-x-dec" class="dec-display">(0)</span></div>
+                <div class="input-group"><label for="manual-y">Entrada Y<br>(8 Bits)</label><input type="text" id="manual-y" value="00000000" maxlength="8"><span id="manual-y-dec" class="dec-display">(0)</span></div>
+                <div class="input-group"><label for="manual-op">Operação:</label>
+                    <select id="manual-op">
+                        <option value="0">000: AND</option><option value="1">001: OR</option><option value="2">010: NOT (em Y)</option><option value="3">011: XOR</option>
+                        <option value="4" selected>100: Adição</option><option value="5">101: Subtração</option><option value="6">110: Multiplicação</option><option value="7">111: Divisão</option>
+                    </select>
+                </div>
+            </div>
+            <div class="button-container">
+                <button id="send-manual-btn">Executar Manual</button>
+                <span id="loading-manual" class="loading">Processando...</span>
+            </div>
+            <h4>Resultado Manual:</h4>
+            <div id="console-manual" class="console"></div>
+        </div>
+
+        <div id="tab-content-auto" class="tab-pane">
+            <h3>Modo Automático</h3>
+            <div class="input-area-wrapper">
+                <div class="input-group"><label for="auto-a">Entrada A<br>(8 Bits)</label><input type="text" id="auto-a" value="00000001" maxlength="8"><span id="auto-a-dec" class="dec-display">(1)</span></div>
+                <div class="input-group"><label for="auto-b">Entrada B<br>(8 Bits)</label><input type="text" id="auto-b" value="00000010" maxlength="8"><span id="auto-b-dec" class="dec-display">(2)</span></div>
+            </div>
+            <div class="button-container">
+                <button id="send-auto-btn">Executar Automático</button>
+                <span id="loading-auto" class="loading">Processando...</span>
+            </div>
+            <h4>Log Automático:</h4>
+            <div id="console-auto" class="console"></div>
+        </div>
+        
+        <div id="tab-content-dump" class="tab-pane">
+            <h3>Dump de Memória</h3>
+            <div class="dump-buttons">
+                <button id="dump-btn-gerais">Regs. Gerais</button>
+                <button id="dump-btn-io">Regs. I/O</button>
+                <button id="dump-btn-eeprom">EEPROM</button>
+                <button id="dump-btn-flash">Flash</button>
+                <button id="dump-btn-sram">SRAM</button>
+                <button id="dump-btn-heatmap_gerais" class="btn-heatmap">Mapa Gerais</button>
+                <button id="dump-btn-heatmap_io" class="btn-heatmap">Mapa I/O</button>
+            </div>
+            <div id="dump-progress-container" class="progress-container">
+                <div id="dump-progress-bar" class="progress-bar"></div>
+            </div>
+            <h4>Resultado do Dump:</h4>
+            <div id="console-dump" class="console"></div>
+        </div>
+    </div>
+
+    <script>
+        const tabs = { manual: document.getElementById('tab-btn-manual'), auto: document.getElementById('tab-btn-auto'), dump: document.getElementById('tab-btn-dump') };
+        const panes = { manual: document.getElementById('tab-content-manual'), auto: document.getElementById('tab-content-auto'), dump: document.getElementById('tab-content-dump') };
+        const consoles = { manual: document.getElementById('console-manual'), auto: document.getElementById('console-auto'), dump: document.getElementById('console-dump') };
+        const loaders = { manual: document.getElementById('loading-manual'), auto: document.getElementById('loading-auto') };
+        const inputs = { mx: document.getElementById('manual-x'), my: document.getElementById('manual-y'), aa: document.getElementById('auto-a'), ab: document.getElementById('auto-b') };
+        const decs = { mx: document.getElementById('manual-x-dec'), my: document.getElementById('manual-y-dec'), aa: document.getElementById('auto-a-dec'), ab: document.getElementById('auto-b-dec') };
+        
+        // Lista atualizada com os novos botões
+        const dumpIds = ['gerais', 'io', 'eeprom', 'flash', 'sram', 'heatmap_gerais', 'heatmap_io'];
+        const dumpButtons = {};
+        dumpIds.forEach(id => dumpButtons[id] = document.getElementById(`dump-btn-${id}`));
+        const allDumpButtonsArray = Object.values(dumpButtons);
+
+        const progContainer = document.getElementById('dump-progress-container');
+        const progBar = document.getElementById('dump-progress-bar');
+        const serverUrl = document.getElementById('server-url');
+
+        Object.keys(tabs).forEach(key => {
+            tabs[key].addEventListener('click', () => {
+                Object.values(tabs).forEach(t => t.classList.remove('active'));
+                Object.values(panes).forEach(p => p.classList.remove('active'));
+                tabs[key].classList.add('active');
+                panes[key].classList.add('active');
+            });
+        });
+
+        function log(consoleId, msg, type='log', isHtml=false) {
+            const el = consoles[consoleId];
+            if (consoleId === 'dump') {
+                el.className = `console ${type === 'err' ? 'err' : ''}`;
+                // Se for HTML (heatmap), renderiza direto numa div centralizada
+                if (isHtml) {
+                    el.innerHTML = `<div class="console-svg-container">${msg}</div>`;
+                } else if (type === 'log') {
+                    el.innerHTML = `<pre>${msg}</pre>`;
+                } else {
+                    el.innerHTML = `<div class="${type}">${msg}</div>`;
+                }
+            } else if (consoleId === 'auto') {
+                 el.innerHTML += `<div class="log-line ${type}"><span class="log-op">${msg.op}</span><span class="log-flag">${msg.flag}</span></div>`;
+            } else {
+                el.innerHTML = `<div class="${type}">${msg}</div>` + el.innerHTML;
+            }
+        }
+
+        function updateDec(input, output) { output.textContent = input.value === "" ? "(0)" : (/^[01]{1,8}$/.test(input.value) ? `(${parseInt(input.value, 2)})` : "(?)"); }
+        Object.keys(inputs).forEach(k => { inputs[k].addEventListener('input', () => updateDec(inputs[k], decs[k])); updateDec(inputs[k], decs[k]); });
+
+        function getBin(input, consoleId) {
+            if (!/^[01]{8}$/.test(input.value)) { log(consoleId, `ERRO: Entrada '${input.value}' inválida. Use 8 bits.`, 'err'); input.focus(); return null; }
+            return parseInt(input.value, 2);
+        }
+
+        async function callApi(endpoint, payload, consoleId, loader, timeout=15000) {
+            if (!serverUrl.value) { alert("URL do servidor necessária."); return null; }
+            if (loader) loader.classList.add('visible');
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            try {
+                const res = await fetch(`${serverUrl.value}${endpoint}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload), signal: controller.signal
+                });
+                clearTimeout(id);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.description || data.error || res.statusText);
+                return data;
+            } catch (e) {
+                const msg = e.name === 'AbortError' ? 'Tempo limite excedido.' : e.message;
+                log(consoleId, `ERRO: ${msg}`, 'err');
+                return null;
+            } finally {
+                if (loader) loader.classList.remove('visible');
+            }
+        }
+
+        document.getElementById('send-manual-btn').addEventListener('click', async (e) => {
+            e.target.blur();
+            const x = getBin(inputs.mx, 'manual'), y = getBin(inputs.my, 'manual');
+            if (x === null || y === null) return;
+            const op = parseInt(document.getElementById('manual-op').value, 10);
+            log('manual', `Enviando: X=${x}, Y=${y}, OP=${op}`, 'op');
+            const data = await callApi('/api/manual', {x, y, opcode: op}, 'manual', loaders.manual);
+            if (data) log('manual', `Resultado: ${data.resultado_dec} (Hex: ${data.resultado_hex} | Bin: ${data.resultado_bin})\nFlag: ${data.flag_nome} (${data.flag_val})`, 'res-final');
+        });
+
+        document.getElementById('send-auto-btn').addEventListener('click', async (e) => {
+            e.target.blur();
+            const a = getBin(inputs.aa, 'auto'), b = getBin(inputs.ab, 'auto');
+            if (a === null || b === null) return;
+            consoles.auto.innerHTML = '';
+            log('auto', {op: `Iniciando Automático (A=${a}, B=${b})`, flag: ''}, 'op');
+            const data = await callApi('/api/automatico', {a, b}, 'auto', loaders.auto);
+            if (data && data.passos) {
+                data.passos.forEach((p, i) => {
+                    let op_msg = "";
+                    let flag_msg = `Flag: ${p.flag_val} (${p.flag_nome})`;
+                    if (i === data.passos.length - 1) {
+                        op_msg = `${i+1}) ${p.op} = ${p.res_dec}<br><span style="margin-left: 25px; font-size: 0.9em;">(Hex: ${p.res_hex} | Bin: ${p.res_bin})</span>`;
+                    } else {
+                        op_msg = `${i+1}) ${p.op} = ${p.res_dec} (${p.res_bin})`;
+                    }
+                    log('auto', {op: op_msg, flag: flag_msg}, (i === data.passos.length - 1) ? 'res-final' : 'log');
+                });
+            }
+        });
+
+        async function handleDumpClick(dumpType) {
+            allDumpButtonsArray.forEach(btn => btn.disabled = true);
+            consoles.dump.innerHTML = '';
+            progContainer.classList.remove('fade-out');
+            progContainer.style.display = 'block';
+            progBar.className = 'progress-bar animate';
+            void progBar.offsetWidth; 
+            const minWait = new Promise(r => setTimeout(r, 2000));
+            
+            // Passa 'dump' para callApi logar erros automaticamente se falhar
+            const data = await callApi('/api/dump', {type: dumpType}, 'dump', null, 25000);
+            
+            if (data && data.response) {
+                await minWait;
+                progBar.className = 'progress-bar success';
+                setTimeout(() => startFadeOut(() => {
+                    // MUDANÇA: Verifica se a resposta é HTML (heatmap) ou texto puro
+                    log('dump', data.response, 'log', data.is_html);
+                }), 500);
+            } else {
+                progBar.className = 'progress-bar error';
+                setTimeout(() => startFadeOut(), 2000);
+            }
+            function startFadeOut(callback) {
+                progContainer.classList.add('fade-out');
+                setTimeout(() => {
+                    progContainer.style.display = 'none';
+                    progContainer.classList.remove('fade-out');
+                    if (callback) callback();
+                    allDumpButtonsArray.forEach(btn => btn.disabled = false);
+                }, 500);
+            }
+        }
+        Object.keys(dumpButtons).forEach(type => dumpButtons[type].addEventListener('click', () => handleDumpClick(type)));
+    </script>
+</body>
+</html>
